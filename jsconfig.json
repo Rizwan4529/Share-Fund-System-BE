@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "paths": {
+      "#/*": ["./src/*"]
+    },
+    "resolveJsonModule": true,
+    "checkJs": false
+  },
+  "include": ["src/**/*.js"],
+  "exclude": ["node_modules"]
+}
