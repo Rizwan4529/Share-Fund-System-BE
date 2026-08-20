@@ -48,7 +48,7 @@ export const ENUMS = {
     DISQUALIFIED: "disqualified",
     EXPIRED: "expired",
   },
-  founderTier: {
+  FOUNDER_TIER: {
     NONE: "none",
     ESSENTIAL_100: "essential_100",
     EXPANDED_500: "expanded_500",
