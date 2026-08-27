@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { ENUMS } from "#/utils/constants";
+import { ENUMS } from "#/utils/constants.js";
 import bcrypt from "bcrypt";
 const { Schema, model } = mongoose;
 
@@ -32,7 +32,7 @@ const userSchema = new Schema(
       type: String,
       required: [true, "Password is required"],
       minLength: [8, "Password must be at least 8 characters long"],
-      select: false,
+      // select: false,
       validate: {
         validator: (value) =>
           /[A-Z]/.test(value) &&
@@ -52,6 +52,7 @@ const userSchema = new Schema(
       type: String,
       required: [true, "Phone number is required"],
       trim: true,
+      unique: true,
       validate: {
         validator: (value) => {
           // Check only allowed characters
@@ -172,7 +173,7 @@ const userSchema = new Schema(
     status: {
       type: String,
       enum: [ENUMS.AUTH_STATUS.ACTIVE, ENUMS.AUTH_STATUS.PENDING_VERIFICATION],
-      default: ENUMS.AUTH_STATUS.ACTIVE,
+      default: ENUMS.AUTH_STATUS.PENDING_VERIFICATION,
     },
     emailVerified: {
       type: Boolean,

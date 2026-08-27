@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="x-apple-disable-message-reformatting" />
+  <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
+  <title>{{brandName}}</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&family=Schibsted+Grotesk:wght@700&display=swap" rel="stylesheet" />
+  <style>
+    :root { color-scheme: light; supported-color-schemes: light; }
+    html, body { margin: 0 !important; padding: 0 !important; height: 100% !important; width: 100% !important; }
+    body { background-color: {{colorAppCanvas}}; }
+    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    img { border: 0; line-height: 100%; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }
+    a { text-decoration: none; }
+    @media only screen and (max-width: 620px) {
+      .email-shell { width: 100% !important; }
+      .email-card { width: 100% !important; border-radius: 12px !important; }
+      .email-px { padding-left: 24px !important; padding-right: 24px !important; }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background-color:{{colorAppCanvas}};-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+  <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">
+    {{preheader}}
+  </div>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:{{colorAppCanvas}};">
+    <tr>
+      <td align="center" style="padding:32px 16px 48px;">
+        <table role="presentation" class="email-shell" cellpadding="0" cellspacing="0" border="0" width="560" style="width:560px;max-width:560px;">
+          <tr>
+            <td align="left" style="padding:0 4px 24px;">
+              <a href="{{frontendBaseUrl}}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;">
+                <img src="{{logoUrl}}" alt="{{brandShortName}}" height="36" style="display:block;height:36px;width:auto;border:0;font-family:{{fontDisplay}};font-size:22px;font-weight:700;color:{{colorInkHeading}};" />
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <table role="presentation" class="email-card" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;background-color:{{colorWhite}};border:1px solid {{colorLine}};border-radius:16px;overflow:hidden;box-shadow:0 30px 60px -24px rgba(12,31,68,0.4);">
+                <tr>
+                  <td>
+                    {{content}}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:28px 12px 0;font-family:{{fontBody}};font-size:12px;line-height:18px;color:{{colorMutedSoft}};">
+              &copy; {{year}} {{brandName}}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

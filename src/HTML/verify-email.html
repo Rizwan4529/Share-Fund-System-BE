@@ -1,0 +1,66 @@
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+  <tr>
+    <td
+      class="email-px"
+      bgcolor="{{colorNavyDarkest}}"
+      background="{{worldWhiteUrl}}"
+      align="center"
+      style="background-color:{{colorNavyDarkest}};background-image:linear-gradient(150deg, {{colorNavyDarkest}}, {{colorNavy}} 58%, {{colorNavyCard}});background-size:cover;background-position:center right;padding:48px 40px 44px;text-align:center;"
+    >
+      <!--[if gte mso 9]>
+      <v:rect xmlns:v="urn:schemas-microsoft-com:vml" fill="true" stroke="false" style="width:560px;">
+      <v:fill type="gradient" color="{{colorNavyDarkest}}" color2="{{colorNavyCard}}" angle="150" />
+      <v:textbox inset="0,48,0,44" style="mso-fit-shape-to-text:true;">
+      <![endif]-->
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 20px;">
+        <tr>
+          <td align="center" valign="middle" width="82" height="82" bgcolor="{{colorGold}}" style="width:82px;height:82px;border-radius:41px;background-color:{{colorGold}};background-image:linear-gradient(135deg, {{colorGold}}, {{colorGoldDark}});box-shadow:0 16px 36px -12px rgba(207,159,52,0.5);">
+            {{mailIconInner}}
+          </td>
+        </tr>
+      </table>
+      <h1 style="margin:0;font-family:{{fontDisplay}};font-size:26px;line-height:32px;font-weight:700;letter-spacing:-0.4px;color:{{colorWhite}};">
+        Welcome to {{brandShortName}}, {{firstName}}.
+      </h1>
+      <p style="margin:8px 0 0;font-family:{{fontBody}};font-size:15px;line-height:22px;color:rgba(255,255,255,0.75);">
+        One quick step before you dive in.
+      </p>
+      <!--[if gte mso 9]>
+      </v:textbox>
+      </v:rect>
+      <![endif]-->
+    </td>
+  </tr>
+  <tr>
+    <td class="email-px" align="center" style="padding:36px 40px 40px;background-color:{{colorWhite}};text-align:center;">
+      <p style="margin:0;font-family:{{fontBody}};font-size:15px;line-height:24px;color:{{colorMutedSoft}};">
+        We&rsquo;ve sent a verification link to
+        <strong style="color:{{colorInkHeading}};">{{email}}</strong>.
+        Click the button below to confirm your address, then continue in the app.
+      </p>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:24px 0 0;">
+        <tr>
+          <td align="center" bgcolor="{{colorGold}}" style="background-color:{{colorGold}};border-radius:6px;">
+            <a
+              href="{{verifyUrl}}"
+              target="_blank"
+              rel="noopener noreferrer"
+              style="display:block;padding:12px 20px;font-family:{{fontBody}};font-size:14px;line-height:16px;font-weight:600;color:{{colorWhite}};text-decoration:none;"
+            >
+              Verify my email
+            </a>
+          </td>
+        </tr>
+      </table>
+      <p style="margin:20px 0 0;font-family:{{fontBody}};font-size:13px;line-height:20px;color:{{colorMutedSoft}};">
+        If the button doesn&rsquo;t work, copy and paste this link into your browser:
+      </p>
+      <p style="margin:8px 0 0;font-family:{{fontBody}};font-size:12px;line-height:18px;word-break:break-all;">
+        <a href="{{verifyUrl}}" target="_blank" rel="noopener noreferrer" style="color:{{colorGoldDark}};text-decoration:underline;">{{verifyUrl}}</a>
+      </p>
+      <p style="margin:24px 0 0;font-family:{{fontBody}};font-size:12px;line-height:18px;color:{{colorMutedSoft}};">
+        If you didn&rsquo;t create a {{brandName}} account, you can ignore this email.
+      </p>
+    </td>
+  </tr>
+</table>

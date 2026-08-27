@@ -6,7 +6,54 @@ export const HTTP_STATUS = {
   UNAUTHORIZED: 401,
   FORBIDDEN: 403,
   NOT_FOUND: 404,
+  CONFLICT: 409,
   INTERNAL_SERVER_ERROR: 500,
+};
+
+export const FRONTEND_ROUTES = {
+  VERIFY_EMAIL: "verify-email/",
+};
+
+/** SFS brand tokens — sourced from the frontend theme (index.css / VerifyWelcomeCard). */
+export const EMAIL_BRAND = {
+  NAME: "Share Fund System",
+  SHORT_NAME: "SFS",
+  COLORS: {
+    NAVY_DARKEST: "#06122e",
+    NAVY: "#0a1c40",
+    NAVY_MID: "#0b2049",
+    NAVY_DEEP: "#0c1f44",
+    NAVY_CARD: "#123066",
+    GOLD: "#d9b74a",
+    GOLD_DARK: "#c4a33a",
+    GOLD_DEEP: "#a88c2e",
+    INK: "#1b2c52",
+    INK_HEADING: "#0c1f44",
+    MUTED_SOFT: "#5c6f93",
+    LINE: "#e4e9f2",
+    WHITE: "#ffffff",
+    APP_CANVAS: "#eef2f8",
+    CANVAS_EDGE: "#e4e9f2",
+  },
+  FONTS: {
+    DISPLAY: "Schibsted Grotesk, Arial, Helvetica, sans-serif",
+    BODY: "Hanken Grotesk, Arial, Helvetica, sans-serif",
+  },
+};
+
+/** Relative asset paths on the frontend. Overridden by EMAIL_*_URL env vars. */
+export const EMAIL_ASSET_PATHS = {
+  LOGO: "https://share-fund-system-fe.vercel.app/assets/logo-light.png",
+  WORLD_WHITE: "assets/world-white.png",
+};
+
+export const EMAIL_TEMPLATES = {
+  VERIFY_EMAIL: {
+    FILE: "verify-email",
+    SUBJECT: "Verify your email address",
+    PREHEADER: "One quick step before you dive in.",
+    TEXT: "Welcome to SFS, {{firstName}}.\n\nOne quick step before you dive in.\n\nWe've sent a verification link to {{email}}. Open the link below to confirm your address:\n\n{{verifyUrl}}\n\nIf you didn't create a Share Fund System account, you can ignore this email.",
+  },
 };
 
 export const ENUMS = {

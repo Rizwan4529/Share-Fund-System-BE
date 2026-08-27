@@ -1,7 +1,9 @@
 import express from "express";
 import cors from "cors";
-import { HTTP_STATUS } from "#/utils/constants";
-import { errorMiddleware } from "#/middleware/errorMiddleware";
+import { HTTP_STATUS } from "#/utils/constants.js";
+import { errorMiddleware } from "#/middleware/error.middleware.js";
+import { AppError } from "#/utils/appError.js";
+import userRoutes from "#/features/users/user.routes.js";
 const app = express();
 
 app.use(
@@ -44,14 +46,16 @@ app.get("/", (req, res) => {
   });
 });
 
-app.use((req, res) => {
-  res.status(HTTP_STATUS.NOT_FOUND).json({
-    success: false,
-    message: `${req.originalUrl} route not found`,
-  });
-});
+app.use("/api/v1", userRoutes);
 
-// Rest of the routes
+// Register feature routes ABOVE the 404 handler.
+// Anything that does not match a route falls through to 404, then errorMiddleware.
+
+app.use((req, res, next) => {
+  next(
+    new AppError(`${req.originalUrl} route not found`, HTTP_STATUS.NOT_FOUND),
+  );
+});
 
 app.use(errorMiddleware);
 
