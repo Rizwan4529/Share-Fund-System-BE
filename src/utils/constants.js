@@ -327,6 +327,9 @@ export const ENUMS = {
     CREATED_FOUNDER_PLAN: "created_founder_plan",
     UPDATED_FOUNDER_PLAN: "updated_founder_plan",
     TOGGLED_FOUNDER_PLAN_AVAILABILITY: "toggled_founder_plan_availability",
+    CREATED_LEGAL_DOCUMENT: "created_legal_document",
+    UPDATED_LEGAL_DOCUMENT: "updated_legal_document",
+    PUBLISHED_LEGAL_DOCUMENT: "published_legal_document",
   },
   AUDIT_LOG_TARGET_TYPE: {
     USER: "User",

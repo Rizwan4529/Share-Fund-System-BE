@@ -27,6 +27,7 @@ const legalDocumentsSchema = new Schema(
     status: {
       type: String,
       enum: Object.values(ENUMS.LEGAL_DOCUMENT_STATUS),
+      default: ENUMS.LEGAL_DOCUMENT_STATUS.DRAFT,
     },
     effectiveDate: { type: Date },
     updatedBy: {
@@ -36,6 +37,8 @@ const legalDocumentsSchema = new Schema(
   },
   { timestamps: true },
 );
+
+legalDocumentsSchema.index({ documentType: 1, version: 1 }, { unique: true });
 
 const LegalDocument = model("LegalDocument", legalDocumentsSchema);
 
