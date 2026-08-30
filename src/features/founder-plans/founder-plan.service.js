@@ -2,7 +2,7 @@ import { ENUMS, HTTP_STATUS } from "#/utils/constants.js";
 import { AppError } from "#/utils/appError.js";
 import FounderPlan from "./founder-plan.model.js";
 import SuccessCenterProgram from "#/features/success-center-programs/success-center-program.model.js";
-import AuditLog from "#/features/audit-logs/audit-log.model.js";
+import { writeAuditLog } from "#/features/audit-logs/audit-log.service.js";
 
 const PROGRAM_FIELDS = "name status programType goalNature";
 
@@ -11,12 +11,14 @@ const populatePlans = (query) =>
     .populate("includedSuccessCenters", PROGRAM_FIELDS)
     .populate("eligiblePrograms", PROGRAM_FIELDS);
 
-const writeAuditLog = async (user, action, plan) => {
-  await AuditLog.create({
+const auditFounderPlan = async (user, action, plan, beforeValue, afterValue) => {
+  await writeAuditLog({
     actorId: user._id,
     action,
     targetType: ENUMS.AUDIT_LOG_TARGET_TYPE.FOUNDER_PLAN,
     targetId: plan._id,
+    beforeValue,
+    afterValue: afterValue ?? plan,
   });
 };
 
@@ -93,9 +95,11 @@ export const createFounderPlan = async (data, user) => {
 
   const plan = new FounderPlan(data);
   await plan.save();
-  await writeAuditLog(
+  await auditFounderPlan(
     user,
     ENUMS.AUDIT_LOG_ACTION.CREATED_FOUNDER_PLAN,
+    plan,
+    null,
     plan,
   );
 
@@ -117,11 +121,14 @@ export const updateFounderPlan = async (id, data, user) => {
     ...(data.eligiblePrograms || []),
   ]);
 
+  const beforeValue = plan.toObject();
   Object.assign(plan, data);
   await plan.save();
-  await writeAuditLog(
+  await auditFounderPlan(
     user,
     ENUMS.AUDIT_LOG_ACTION.UPDATED_FOUNDER_PLAN,
+    plan,
+    beforeValue,
     plan,
   );
 
@@ -147,12 +154,15 @@ export const toggleFounderPlanAvailability = async (id, data, user) => {
     };
   }
 
+  const beforeValue = { status: plan.status };
   plan.status = data.status;
   await plan.save();
-  await writeAuditLog(
+  await auditFounderPlan(
     user,
     ENUMS.AUDIT_LOG_ACTION.TOGGLED_FOUNDER_PLAN_AVAILABILITY,
     plan,
+    beforeValue,
+    { status: plan.status },
   );
 
   const populated = await findFounderPlanById(plan._id);

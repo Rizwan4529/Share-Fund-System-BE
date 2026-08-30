@@ -319,6 +319,7 @@ export const ENUMS = {
   },
   AUDIT_LOG_ACTION: {
     UPDATE_SETTING: "updated_setting",
+    CREATED_SETTING: "created_setting",
     ADJUSTED_RECOMMENDATION: "adjusted_recommendation",
     PROCESSED_REFUND: "processed_refund",
     DEACTIVATED_CATEGORY: "deactivated_category",

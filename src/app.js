@@ -8,6 +8,7 @@ import settingRoutes from "#/features/settings/setting.routes.js";
 import founderPlanRoutes from "#/features/founder-plans/founder-plan.routes.js";
 import legalDocumentRoutes from "#/features/legal-documents/legal-document.routes.js";
 import legalAcceptanceRoutes from "#/features/legal-acceptances/legal-acceptance.routes.js";
+import auditLogRoutes from "#/features/audit-logs/audit-log.routes.js";
 const app = express();
 
 app.use(
@@ -55,6 +56,7 @@ app.use("/api/v1/settings", settingRoutes);
 app.use("/api/v1/founder-plans", founderPlanRoutes);
 app.use("/api/v1/legal-documents", legalDocumentRoutes);
 app.use("/api/v1/legal-acceptances", legalAcceptanceRoutes);
+app.use("/api/v1/audit-logs", auditLogRoutes);
 
 // Register feature routes ABOVE the 404 handler.
 // Anything that does not match a route falls through to 404, then errorMiddleware.

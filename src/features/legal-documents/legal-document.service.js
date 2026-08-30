@@ -1,14 +1,22 @@
 import { ENUMS, HTTP_STATUS } from "#/utils/constants.js";
 import { AppError } from "#/utils/appError.js";
 import LegalDocument from "./legal-document.model.js";
-import AuditLog from "#/features/audit-logs/audit-log.model.js";
+import { writeAuditLog } from "#/features/audit-logs/audit-log.service.js";
 
-const writeAuditLog = async (user, action, document) => {
-  await AuditLog.create({
+const auditLegalDocument = async (
+  user,
+  action,
+  document,
+  beforeValue,
+  afterValue,
+) => {
+  await writeAuditLog({
     actorId: user._id,
     action,
     targetType: ENUMS.AUDIT_LOG_TARGET_TYPE.LEGAL_DOCUMENT,
     targetId: document._id,
+    beforeValue,
+    afterValue: afterValue ?? document,
   });
 };
 
@@ -132,9 +140,11 @@ export const createLegalDocument = async (data, user) => {
     updatedBy: user._id,
   });
   await document.save();
-  await writeAuditLog(
+  await auditLegalDocument(
     user,
     ENUMS.AUDIT_LOG_ACTION.CREATED_LEGAL_DOCUMENT,
+    document,
+    null,
     document,
   );
 
@@ -154,13 +164,21 @@ export const updateLegalDocument = async (documentType, data, user) => {
     );
 
   if (latest.status === ENUMS.LEGAL_DOCUMENT_STATUS.DRAFT) {
+    const beforeValue = {
+      title: latest.title,
+      content: latest.content,
+      version: latest.version,
+      status: latest.status,
+    };
     if (data.title !== undefined) latest.title = data.title;
     if (data.content !== undefined) latest.content = data.content;
     latest.updatedBy = user._id;
     await latest.save();
-    await writeAuditLog(
+    await auditLegalDocument(
       user,
       ENUMS.AUDIT_LOG_ACTION.UPDATED_LEGAL_DOCUMENT,
+      latest,
+      beforeValue,
       latest,
     );
 
@@ -180,9 +198,11 @@ export const updateLegalDocument = async (documentType, data, user) => {
     updatedBy: user._id,
   });
   await document.save();
-  await writeAuditLog(
+  await auditLegalDocument(
     user,
     ENUMS.AUDIT_LOG_ACTION.UPDATED_LEGAL_DOCUMENT,
+    document,
+    latest,
     document,
   );
 
@@ -214,14 +234,23 @@ export const publishLegalDocument = async (
       HTTP_STATUS.BAD_REQUEST,
     );
 
+  const beforeValue = {
+    status: document.status,
+    effectiveDate: document.effectiveDate,
+  };
   document.status = ENUMS.LEGAL_DOCUMENT_STATUS.PUBLISHED;
   document.effectiveDate = data.effectiveDate || new Date();
   document.updatedBy = user._id;
   await document.save();
-  await writeAuditLog(
+  await auditLegalDocument(
     user,
     ENUMS.AUDIT_LOG_ACTION.PUBLISHED_LEGAL_DOCUMENT,
     document,
+    beforeValue,
+    {
+      status: document.status,
+      effectiveDate: document.effectiveDate,
+    },
   );
 
   return {

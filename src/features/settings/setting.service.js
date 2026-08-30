@@ -1,7 +1,7 @@
 import { ENUMS, HTTP_STATUS } from "#/utils/constants.js";
 import { AppError } from "#/utils/appError.js";
 import Setting from "./setting.model.js";
-import AuditLog from "#/features/audit-logs/audit-log.model.js";
+import { writeAuditLog } from "#/features/audit-logs/audit-log.service.js";
 
 const assertValueMatchesDataType = (value, dataType) => {
   const isValid =
@@ -68,6 +68,13 @@ export const insertSettings = async (data, user) => {
     updatedBy: user._id,
   });
   await setting.save();
+  await writeAuditLog({
+    actorId: user._id,
+    action: ENUMS.AUDIT_LOG_ACTION.CREATED_SETTING,
+    targetType: ENUMS.AUDIT_LOG_TARGET_TYPE.SETTING,
+    targetId: setting._id,
+    afterValue: setting,
+  });
 
   return {
     success: true,
@@ -80,6 +87,7 @@ export const updateSetting = async (key, data, user) => {
   const setting = await findSettingByKey(key);
   assertValueMatchesDataType(data.value, setting.dataType);
 
+  const beforeValue = { value: setting.value };
   setting.versionHistory.push({
     value: setting.value,
     updatedBy: user._id,
@@ -92,12 +100,13 @@ export const updateSetting = async (key, data, user) => {
     setting.effectiveDate = data.effectiveDate;
   }
   await setting.save();
-
-  await AuditLog.create({
+  await writeAuditLog({
     actorId: user._id,
     action: ENUMS.AUDIT_LOG_ACTION.UPDATE_SETTING,
     targetType: ENUMS.AUDIT_LOG_TARGET_TYPE.SETTING,
     targetId: setting._id,
+    beforeValue,
+    afterValue: { value: setting.value, reason: data.reason },
   });
 
   return {
