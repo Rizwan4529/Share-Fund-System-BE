@@ -8,6 +8,7 @@
     "dev": "nodemon src/server.js",
     "seed:founder-plans": "node scripts/seed-founder-plans.js",
     "seed:setting-categories": "node scripts/seed-setting-categories.js",
+    "seed:legal-documents": "node scripts/seed-legal-documents.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

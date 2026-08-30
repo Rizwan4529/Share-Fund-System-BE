@@ -47,6 +47,19 @@ export const hasAcceptedCurrentVersion = async (userId, documentType) => {
   return Boolean(acceptance);
 };
 
+export const recordAcceptancesForUser = async (userId, documents, context) => {
+  if (!documents.length) return [];
+  return LegalAcceptance.insertMany(
+    documents.map((document) => ({
+      userId,
+      legalDocumentId: document._id,
+      documentType: document.documentType,
+      documentVersion: document.version,
+      context,
+    })),
+  );
+};
+
 export const recordLegalAcceptance = async (data, user) => {
   const document = await getPublishedLegalDocument(data.documentType);
 

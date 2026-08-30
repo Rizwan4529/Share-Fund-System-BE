@@ -62,6 +62,22 @@ export const getPublishedLegalDocument = async (documentType) => {
   return document;
 };
 
+export const requirePublishedDocuments = async (documentTypes) => {
+  const documents = [];
+  const missing = [];
+  for (const documentType of documentTypes) {
+    const document = await findPublishedByType(documentType);
+    if (document) documents.push(document);
+    else missing.push(documentType);
+  }
+  if (missing.length)
+    throw new AppError(
+      `Published legal documents required before signup: ${missing.join(", ")}`,
+      HTTP_STATUS.BAD_REQUEST,
+    );
+  return documents;
+};
+
 export const listLegalDocuments = async (user) => {
   if (user.role === ENUMS.ROLES.ADMIN) {
     const documents = await LegalDocument.find()

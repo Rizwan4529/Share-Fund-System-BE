@@ -6,9 +6,17 @@ import {
   HTTP_STATUS,
 } from "#/utils/constants.js";
 import { AppError } from "#/utils/appError.js";
+import { requirePublishedDocuments } from "#/features/legal-documents/legal-document.service.js";
+import { recordAcceptancesForUser } from "#/features/legal-acceptances/legal-acceptance.service.js";
 import User from "./user.model.js";
 import { sendEmail } from "#/utils/email.js";
 import { interpolate, renderEmailTemplate } from "#/utils/emailTemplate.js";
+
+const SIGNUP_LEGAL_DOCUMENT_TYPES = [
+  ENUMS.LEGAL_DOCUMENT_TYPE.TERMS,
+  ENUMS.LEGAL_DOCUMENT_TYPE.PRIVACY,
+  ENUMS.LEGAL_DOCUMENT_TYPE.FOUNDING_DISCLOSURE,
+];
 
 const buildVerificationUrl = (token) =>
   new URL(
@@ -96,7 +104,13 @@ const createRegisteredUser = async (data, role) => {
 };
 
 export const registerUser = async (data) => {
+  const documents = await requirePublishedDocuments(SIGNUP_LEGAL_DOCUMENT_TYPES);
   const safeUser = await createRegisteredUser(data, ENUMS.ROLES.USER);
+  await recordAcceptancesForUser(
+    safeUser._id,
+    documents,
+    ENUMS.LEGAL_ACCEPTANCE_CONTEXT.SIGNUP,
+  );
 
   return {
     success: true,
