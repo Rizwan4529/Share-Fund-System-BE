@@ -9,6 +9,8 @@ import founderPlanRoutes from "#/features/founder-plans/founder-plan.routes.js";
 import legalDocumentRoutes from "#/features/legal-documents/legal-document.routes.js";
 import legalAcceptanceRoutes from "#/features/legal-acceptances/legal-acceptance.routes.js";
 import auditLogRoutes from "#/features/audit-logs/audit-log.routes.js";
+import successCenterProgramRoutes from "#/features/success-center-programs/success-center-program.routes.js";
+import settingCategoryRoutes from "#/features/setting-categories/setting-category.routes.js";
 const app = express();
 
 app.use(
@@ -22,7 +24,7 @@ app.use(
 
       //Always allow request with no origin (like Postman, curl, etc)
       if (!origin) return callback(null, true);
-
+      // console.log("origin", origin);
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       } else {
@@ -53,10 +55,12 @@ app.get("/", (req, res) => {
 
 app.use("/api/v1", userRoutes);
 app.use("/api/v1/settings", settingRoutes);
+app.use("/api/v1/setting-categories", settingCategoryRoutes);
 app.use("/api/v1/founder-plans", founderPlanRoutes);
 app.use("/api/v1/legal-documents", legalDocumentRoutes);
 app.use("/api/v1/legal-acceptances", legalAcceptanceRoutes);
 app.use("/api/v1/audit-logs", auditLogRoutes);
+app.use("/api/v1/success-center-programs", successCenterProgramRoutes);
 
 // Register feature routes ABOVE the 404 handler.
 // Anything that does not match a route falls through to 404, then errorMiddleware.

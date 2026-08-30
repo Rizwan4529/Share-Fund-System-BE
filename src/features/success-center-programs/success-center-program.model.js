@@ -56,8 +56,8 @@ const sucessCenterProgramsSchema = new Schema(
   { timestamps: true },
 );
 
-sucessCenterProgramsSchema.pre("save", async function (next) {
-  if (!this.isNew) return next();
+sucessCenterProgramsSchema.pre("save", async function () {
+  if (!this.isNew || this.order != null) return;
 
   const lastProgram = await this.constructor
     .findOne()
@@ -65,7 +65,6 @@ sucessCenterProgramsSchema.pre("save", async function (next) {
     .select("order");
 
   this.order = lastProgram ? lastProgram.order + 1 : 1;
-  next();
 });
 
 const SuccessCenterProgram = model(

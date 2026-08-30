@@ -11,6 +11,11 @@ export const registerUser = async (req, res) => {
   return res.status(HTTP_STATUS.CREATED).json(response);
 };
 
+export const registerAdmin = async (req, res) => {
+  const response = await userService.registerAdmin(req.body);
+  return res.status(HTTP_STATUS.CREATED).json(response);
+};
+
 export const verifyEmail = async (req, res) => {
   const response = await userService.verifyEmail(req.body);
   res.status(HTTP_STATUS.OK).json(response);

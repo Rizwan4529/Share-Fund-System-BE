@@ -8,16 +8,17 @@ import {
 } from "./user.validator.js";
 import {
   loginUser,
+  registerAdmin,
   registerUser,
   resendVerificationLink,
   verifyEmail,
 } from "./user.controller.js";
-import { authenticate } from "#/middleware/auth.middleware.js";
 
 const router = express.Router();
 
 router.post("/login/", validate(loginSchema), loginUser);
 router.post("/register/", validate(registerSchema), registerUser);
+router.post("/register-admin/", validate(registerSchema), registerAdmin);
 router.post("/verify-email", validate(verifyEmailSchema), verifyEmail);
 router.post(
   "/resend-link",

@@ -14,8 +14,9 @@ const settingsSchema = new Schema(
     },
     category: {
       type: String,
-      enum: Object.values(ENUMS.SETTING_CATEGORY),
       required: [true, "Category is required"],
+      trim: true,
+      index: true,
     },
     value: {
       type: Schema.Types.Mixed,

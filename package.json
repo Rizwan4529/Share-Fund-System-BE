@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "seed:founder-plans": "node scripts/seed-founder-plans.js",
+    "seed:setting-categories": "node scripts/seed-setting-categories.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

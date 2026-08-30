@@ -65,20 +65,19 @@ export const loginUser = async (data) => {
   };
 };
 
-export const registerUser = async (data) => {
-  // const {
-  // firstName,
-  // lastName,
-  // email,
-  // password,
-  // phone,
-  // country,
-  // address,
-  // stateRegion,
-  // preferredCurrency,
-  // } = data;
-
-  const user = new User(data);
+const createRegisteredUser = async (data, role) => {
+  const user = new User({
+    firstName: data.firstName,
+    lastName: data.lastName,
+    email: data.email,
+    password: data.password,
+    phone: data.phone,
+    country: data.country,
+    address: data.address,
+    stateRegion: data.stateRegion,
+    preferredCurrency: data.preferredCurrency,
+    role,
+  });
   await user.save();
 
   const token = jwt.sign(
@@ -93,11 +92,27 @@ export const registerUser = async (data) => {
   await sendVerificationEmail(user, token);
   const safeUser = user.toObject();
   delete safeUser?.password;
+  return safeUser;
+};
+
+export const registerUser = async (data) => {
+  const safeUser = await createRegisteredUser(data, ENUMS.ROLES.USER);
 
   return {
     success: true,
     message:
       "Registration successful! Please check your email to verify your account.",
+    data: safeUser,
+  };
+};
+
+export const registerAdmin = async (data) => {
+  const safeUser = await createRegisteredUser(data, ENUMS.ROLES.ADMIN);
+
+  return {
+    success: true,
+    message:
+      "Admin registration successful! Please check your email to verify your account.",
     data: safeUser,
   };
 };

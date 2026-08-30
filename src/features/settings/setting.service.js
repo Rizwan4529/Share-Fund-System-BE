@@ -2,6 +2,7 @@ import { ENUMS, HTTP_STATUS } from "#/utils/constants.js";
 import { AppError } from "#/utils/appError.js";
 import Setting from "./setting.model.js";
 import { writeAuditLog } from "#/features/audit-logs/audit-log.service.js";
+import { assertCategoryExists } from "#/features/setting-categories/setting-category.service.js";
 
 const assertValueMatchesDataType = (value, dataType) => {
   const isValid =
@@ -43,6 +44,7 @@ export const getSettingByKey = async (key) => {
 };
 
 export const getSettingsByCategory = async (category) => {
+  await assertCategoryExists(category);
   const settings = await Setting.find({ category }).sort({ key: 1 });
   return {
     success: true,
@@ -61,6 +63,7 @@ export const listSettings = async () => {
 };
 
 export const insertSettings = async (data, user) => {
+  await assertCategoryExists(data.category);
   assertValueMatchesDataType(data.value, data.dataType);
 
   const setting = new Setting({

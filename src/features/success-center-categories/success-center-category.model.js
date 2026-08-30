@@ -46,8 +46,8 @@ const sucessCenterCategorySchema = new Schema(
   { timestamps: true },
 );
 
-sucessCenterCategorySchema.pre("save", async function (next) {
-  if (!this.isNew) return next();
+sucessCenterCategorySchema.pre("save", async function () {
+  if (!this.isNew || this.order != null) return;
 
   const lastCategory = await this.constructor
     .findOne()
@@ -55,7 +55,6 @@ sucessCenterCategorySchema.pre("save", async function (next) {
     .select("order");
 
   this.order = lastCategory ? lastCategory.order + 1 : 1;
-  next();
 });
 
 const SucessCenterCategory = model(

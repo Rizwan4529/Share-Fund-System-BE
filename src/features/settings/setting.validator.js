@@ -11,13 +11,7 @@ const settingValueSchema = z.any().refine((value) => {
 
 export const insertSettingsSchema = z.object({
   key: z.string().min(1, "Key is required"),
-  category: z
-    .string()
-    .min(1, "Category is required")
-    .refine(
-      (value) => Object.values(ENUMS.SETTING_CATEGORY).includes(value),
-      "Invalid category",
-    ),
+  category: z.string().min(1, "Category is required"),
   value: settingValueSchema,
   dataType: z
     .string()
@@ -41,11 +35,5 @@ export const settingKeyParamSchema = z.object({
 });
 
 export const settingCategoryParamSchema = z.object({
-  category: z
-    .string()
-    .min(1, "Category is required")
-    .refine(
-      (value) => Object.values(ENUMS.SETTING_CATEGORY).includes(value),
-      "Invalid category",
-    ),
+  category: z.string().min(1, "Category is required"),
 });
