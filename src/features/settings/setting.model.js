@@ -25,8 +25,8 @@ const settingsSchema = new Schema(
           return (
             typeof value === "number" ||
             Array.isArray(value) ||
-            (typeof value === "object" &&
-              typeof value !== null &&
+            (            typeof value === "object" &&
+              value !== null &&
               !Array.isArray(value))
           );
         },
@@ -44,7 +44,10 @@ const settingsSchema = new Schema(
     versionHistory: {
       type: [
         {
-          value: { type: Number, required: [true, "Value is required"] },
+          value: {
+            type: Schema.Types.Mixed,
+            required: [true, "Value is required"],
+          },
           updatedBy: {
             type: Schema.Types.ObjectId,
             ref: "User",

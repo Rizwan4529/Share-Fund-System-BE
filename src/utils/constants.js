@@ -1,3 +1,12 @@
+import mongoose from "mongoose";
+import { z } from "zod";
+export const OBJECT_ID = z
+  .string()
+  .refine(
+    (value) => mongoose.Types.ObjectId.isValid(value),
+    "Invalid ObjectId",
+  );
+
 export const HTTP_STATUS = {
   OK: 200,
   CREATED: 201,
@@ -315,6 +324,9 @@ export const ENUMS = {
     DEACTIVATED_CATEGORY: "deactivated_category",
     ASSIGNED_FOUNDER_NUMBER: "assigned_founder_number",
     QUALIFIED_FOUNDER: "qualified_founder",
+    CREATED_FOUNDER_PLAN: "created_founder_plan",
+    UPDATED_FOUNDER_PLAN: "updated_founder_plan",
+    TOGGLED_FOUNDER_PLAN_AVAILABILITY: "toggled_founder_plan_availability",
   },
   AUDIT_LOG_TARGET_TYPE: {
     USER: "User",

@@ -29,3 +29,15 @@ export const authenticate = async (req, res, next) => {
   req.user = user;
   next();
 };
+
+export const authorize = (...roles) => {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role))
+      throw new AppError(
+        "You are not authorized to perform this action",
+        HTTP_STATUS.FORBIDDEN,
+      );
+
+    next();
+  };
+};

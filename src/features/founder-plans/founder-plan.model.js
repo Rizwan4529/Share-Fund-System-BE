@@ -8,6 +8,7 @@ const founderPlanSchema = new Schema(
     name: {
       type: String,
       required: [true, "Name is required"],
+      unique: true,
       enum: Object.values(ENUMS.FOUNDER_PLAN_NAME),
     },
     price: {
