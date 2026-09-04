@@ -10,6 +10,7 @@ import legalDocumentRoutes from "#/features/legal-documents/legal-document.route
 import legalAcceptanceRoutes from "#/features/legal-acceptances/legal-acceptance.routes.js";
 import auditLogRoutes from "#/features/audit-logs/audit-log.routes.js";
 import successCenterProgramRoutes from "#/features/success-center-programs/success-center-program.routes.js";
+import successCenterCategoryRoutes from "#/features/success-center-categories/success-center-category.routes.js";
 import settingCategoryRoutes from "#/features/setting-categories/setting-category.routes.js";
 const app = express();
 
@@ -60,6 +61,7 @@ app.use("/api/v1/founder-plans", founderPlanRoutes);
 app.use("/api/v1/legal-documents", legalDocumentRoutes);
 app.use("/api/v1/legal-acceptances", legalAcceptanceRoutes);
 app.use("/api/v1/audit-logs", auditLogRoutes);
+app.use("/api/v1/success-center-categories", successCenterCategoryRoutes);
 app.use("/api/v1/success-center-programs", successCenterProgramRoutes);
 
 // Register feature routes ABOVE the 404 handler.

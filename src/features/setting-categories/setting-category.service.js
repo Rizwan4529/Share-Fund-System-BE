@@ -108,25 +108,29 @@ export const updateSettingCategory = async (id, data, user) => {
 
 export const deleteSettingCategory = async (id, user) => {
   const category = await findCategoryById(id);
-  const inUse = await Setting.countDocuments({ category: category.slug });
-  if (inUse > 0)
-    throw new AppError(
-      `Cannot delete category '${category.label}' while ${inUse} setting${inUse === 1 ? "" : "s"} still use it`,
-      HTTP_STATUS.CONFLICT,
-    );
-
+  const settings = await Setting.find({ category: category.slug }).select(
+    "key category",
+  );
+  const deletedSettingKeys = settings.map((setting) => setting.key);
+  await Setting.deleteMany({ category: category.slug });
   await category.deleteOne();
   await writeAuditLog({
     actorId: user._id,
     action: ENUMS.AUDIT_LOG_ACTION.DELETED_SETTING_CATEGORY,
     targetType: ENUMS.AUDIT_LOG_TARGET_TYPE.SETTING_CATEGORY,
     targetId: category._id,
-    beforeValue: category,
+    beforeValue: {
+      ...category.toObject(),
+      deletedSettingKeys,
+    },
   });
 
   return {
     success: true,
-    message: "Setting category deleted successfully",
+    message:
+      deletedSettingKeys.length > 0
+        ? `Setting category deleted along with ${deletedSettingKeys.length} setting${deletedSettingKeys.length === 1 ? "" : "s"}`
+        : "Setting category deleted successfully",
     data: category,
   };
 };
