@@ -1,9 +1,18 @@
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { EMAIL_ASSET_PATHS, EMAIL_BRAND } from "./constants.js";
 
-const htmlDir = join(dirname(fileURLToPath(import.meta.url)), "../html");
+const here = dirname(fileURLToPath(import.meta.url));
+const htmlDir = ["HTML", "html"]
+  .map((folder) => join(here, "..", folder))
+  .find((folder) => existsSync(folder));
+
+if (!htmlDir) {
+  throw new Error(
+    `Email HTML folder not found next to src/utils. Expected src/HTML or src/html.`,
+  );
+}
 
 const escapeHtml = (value) =>
   String(value ?? "")
