@@ -9,6 +9,8 @@
     "seed:founder-plans": "node scripts/seed-founder-plans.js",
     "seed:setting-categories": "node scripts/seed-setting-categories.js",
     "seed:legal-documents": "node scripts/seed-legal-documents.js",
+    "seed:legal-documents:force": "node scripts/seed-legal-documents.js --force",
+    "publish:legal-documents": "node scripts/publish-legal-documents-api.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
