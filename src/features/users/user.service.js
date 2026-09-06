@@ -1,4 +1,3 @@
-import jwt from "jsonwebtoken";
 import {
   EMAIL_TEMPLATES,
   ENUMS,
@@ -6,6 +5,7 @@ import {
   HTTP_STATUS,
 } from "#/utils/constants.js";
 import { AppError } from "#/utils/appError.js";
+import { signUserToken, verifyUserToken } from "#/utils/jwt.js";
 import { requirePublishedDocuments } from "#/features/legal-documents/legal-document.service.js";
 import { recordAcceptancesForUser } from "#/features/legal-acceptances/legal-acceptance.service.js";
 import User from "./user.model.js";
@@ -53,15 +53,7 @@ export const loginUser = async (data) => {
     throw new AppError("Invalid email or password", HTTP_STATUS.UNAUTHORIZED);
   }
 
-  const token = jwt.sign(
-    {
-      userId: user._id,
-    },
-    process.env.JWT_SECRET,
-    {
-      expiresIn: process.env.JWT_EXPIRY_DATE,
-    },
-  );
+  const token = signUserToken(user._id);
 
   const userSafe = user.toObject();
   delete userSafe.password;
@@ -88,16 +80,12 @@ const createRegisteredUser = async (data, role) => {
   });
   await user.save();
 
-  const token = jwt.sign(
-    {
-      userId: user._id,
-    },
-    process.env.JWT_SECRET,
-    {
-      expiresIn: "1h",
-    },
-  );
-  await sendVerificationEmail(user, token);
+  const token = signUserToken(user._id, "1h");
+  try {
+    await sendVerificationEmail(user, token);
+  } catch (error) {
+    console.error("Verification email failed after registration:", error);
+  }
   const safeUser = user.toObject();
   delete safeUser?.password;
   return safeUser;
@@ -134,7 +122,7 @@ export const registerAdmin = async (data) => {
 export const verifyEmail = async (data) => {
   const { token } = data;
 
-  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  const decoded = verifyUserToken(token);
   const user = await User.findByIdAndUpdate(
     decoded.userId,
     {
@@ -159,16 +147,12 @@ export const resendVerificationLink = async (data) => {
   const { email } = data;
   const user = await User.findOne({ email });
   if (!user) throw new AppError("User does not exist", HTTP_STATUS.NOT_FOUND);
-  const token = jwt.sign(
-    {
-      userId: user._id,
-    },
-    process.env.JWT_SECRET,
-    {
-      expiresIn: process.env.JWT_EXPIRY_DATE,
-    },
-  );
-  await sendVerificationEmail(user, token);
+  const token = signUserToken(user._id);
+  try {
+    await sendVerificationEmail(user, token);
+  } catch (error) {
+    console.error("Verification email failed on resend:", error);
+  }
   return {
     success: true,
     message:
