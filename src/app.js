@@ -24,6 +24,8 @@ app.use(
         "http://localhost:5173",
         "http://localhost:5174",
         "https://share-fund-system-fe.vercel.app",
+        "https://www.sharefundsystem.com",
+        "https://sharefundsystem.com",
       ];
 
       //Always allow request with no origin (like Postman, curl, etc)
