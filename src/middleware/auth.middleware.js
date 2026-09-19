@@ -30,6 +30,23 @@ export const authenticate = async (req, res, next) => {
   next();
 };
 
+/** Attaches req.user when a valid Bearer token is present; never fails the request. */
+export const optionalAuthenticate = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) return next();
+
+  try {
+    const token = authHeader.split(" ")[1];
+    if (!token) return next();
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+    if (user) req.user = user;
+  } catch {
+    // ignore invalid/expired tokens for optional auth
+  }
+  next();
+};
+
 export const authorize = (...roles) => {
   return (req, res, next) => {
     if (!roles.includes(req.user.role))

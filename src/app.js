@@ -12,6 +12,8 @@ import auditLogRoutes from "#/features/audit-logs/audit-log.routes.js";
 import successCenterProgramRoutes from "#/features/success-center-programs/success-center-program.routes.js";
 import successCenterCategoryRoutes from "#/features/success-center-categories/success-center-category.routes.js";
 import settingCategoryRoutes from "#/features/setting-categories/setting-category.routes.js";
+import waitlistRoutes from "#/features/waitlist/waitlist.routes.js";
+import waitlistCampaignCategoryRoutes from "#/features/waitlist-campaign-categories/waitlist-campaign-category.routes.js";
 const app = express();
 
 app.use(
@@ -64,6 +66,11 @@ app.use("/api/v1/legal-acceptances", legalAcceptanceRoutes);
 app.use("/api/v1/audit-logs", auditLogRoutes);
 app.use("/api/v1/success-center-categories", successCenterCategoryRoutes);
 app.use("/api/v1/success-center-programs", successCenterProgramRoutes);
+app.use(
+  "/api/v1/waitlist/campaign-categories",
+  waitlistCampaignCategoryRoutes,
+);
+app.use("/api/v1/waitlist", waitlistRoutes);
 
 // Register feature routes ABOVE the 404 handler.
 // Anything that does not match a route falls through to 404, then errorMiddleware.

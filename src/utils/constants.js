@@ -317,6 +317,21 @@ export const ENUMS = {
     FOUNDER_ACTIVATION: "founder_activation",
     OTHER: "other",
   },
+  WAITLIST_CAMPAIGN_CATEGORY: {
+    HOUSING: "housing",
+    FOOD_GROCERIES: "food_groceries",
+    UTILITIES: "utilities",
+    DEBT_REDUCTION: "debt_reduction",
+    VEHICLE: "vehicle",
+    MEDICAL: "medical",
+    BUSINESS_GROWTH: "business_growth",
+  },
+  WAITLIST_STATUS: {
+    PENDING: "pending",
+    CONTACTED: "contacted",
+    CONVERTED: "converted",
+    ARCHIVED: "archived",
+  },
   AUDIT_LOG_ACTION: {
     UPDATE_SETTING: "updated_setting",
     CREATED_SETTING: "created_setting",
@@ -340,6 +355,12 @@ export const ENUMS = {
     CREATED_LEGAL_DOCUMENT: "created_legal_document",
     UPDATED_LEGAL_DOCUMENT: "updated_legal_document",
     PUBLISHED_LEGAL_DOCUMENT: "published_legal_document",
+    CREATED_WAITLIST_ENTRY: "created_waitlist_entry",
+    UPDATED_WAITLIST_ENTRY: "updated_waitlist_entry",
+    DELETED_WAITLIST_ENTRY: "deleted_waitlist_entry",
+    CREATED_WAITLIST_CAMPAIGN_CATEGORY: "created_waitlist_campaign_category",
+    UPDATED_WAITLIST_CAMPAIGN_CATEGORY: "updated_waitlist_campaign_category",
+    DELETED_WAITLIST_CAMPAIGN_CATEGORY: "deleted_waitlist_campaign_category",
   },
   AUDIT_LOG_TARGET_TYPE: {
     USER: "User",
@@ -363,6 +384,8 @@ export const ENUMS = {
     CONTENT_BLOCK: "ContentBlock",
     PAYMENT: "Payment",
     FINANCIAL_LEDGER: "FinancialLedger",
+    WAITLIST_ENTRY: "WaitlistEntry",
+    WAITLIST_CAMPAIGN_CATEGORY: "WaitlistCampaignCategory",
   },
   CONTENT_BLOCK_TYPE: {
     RICH_TEXT: "richtext",
