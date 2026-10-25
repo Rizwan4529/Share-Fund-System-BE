@@ -45,6 +45,10 @@ const sucessCenterProgramsSchema = new Schema(
       activationPercentageMax: { type: Number, default: null },
       defaultActivationPercentage: { type: Number, default: null },
       growthPeriodDays: { type: Number, default: null },
+      // Projection overrides; null falls back to settings.
+      eligibilityOffsetDays: { type: Number, default: null },
+      fundingStartOffsetDays: { type: Number, default: null },
+      fundingRangeDays: { type: Number, default: null },
       roundingIncrement: { type: Number, default: null },
       minGoalAmount: { type: Number, default: null },
       maxGoalAmount: { type: Number, default: null },

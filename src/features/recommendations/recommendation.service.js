@@ -4,7 +4,11 @@ import SuccessCenterSelection from "#/features/success-center-selections/success
 import SuccessCenterProgram from "#/features/success-center-programs/success-center-program.model.js";
 import SuccessProfile from "#/features/success-profiles/success-profile.model.js";
 import Recommendation from "./recommendation.model.js";
-import { resolveActivationRules, ruleValues } from "./activation-rules.js";
+import {
+  resolveActivationRules,
+  ruleValues,
+  settingKeyForRule,
+} from "./activation-rules.js";
 import {
   calculateActivationPlan,
   resolveGoalAmount,
@@ -26,6 +30,19 @@ const CODE = ENUMS.ACTIVATION_ERROR_CODE;
 /** 422 with a code the frontend can map to the right "fix this" action. */
 const unprocessable = (message, code) =>
   new AppError(message, HTTP_STATUS.UNPROCESSABLE_ENTITY, [{ code }]);
+
+/**
+ * Projection start date: the activation payment date once paid, otherwise the
+ * moment of calculation (i.e. "if you activated today").
+ */
+const projectionBasisFor = (selection) =>
+  selection.activationStatus === ENUMS.SELECTION_ACTIVATION_STATUS.PAID &&
+  selection.activationPaidAt
+    ? {
+        basis: ENUMS.PROJECTION_BASIS.ACTIVATION_PAID_DATE,
+        basisDate: new Date(selection.activationPaidAt),
+      }
+    : { basis: ENUMS.PROJECTION_BASIS.CALCULATION_DATE, basisDate: new Date() };
 
 /** Upsert the single snapshot for a selection (a lost upsert race retries). */
 const saveSnapshot = async (selectionId, fields) => {
@@ -53,7 +70,7 @@ export const calculateForSelection = async (selectionId, user) => {
     throw unprocessable("This selection has been removed.", CODE.SELECTION_REMOVED);
 
   const program = await SuccessCenterProgram.findById(selection.programId)
-    .select("name programType activationRules updatedAt")
+    .select("name programType goalNature activationRules updatedAt")
     .lean();
   if (!program)
     throw new AppError("Success Center program not found", HTTP_STATUS.NOT_FOUND);
@@ -96,6 +113,10 @@ export const calculateForSelection = async (selectionId, user) => {
     goalAmount,
     financials: profile.financials,
     rules: ruleValues(resolved),
+    projectionContext: {
+      goalNature: program.goalNature,
+      ...projectionBasisFor(selection),
+    },
   });
 
   const recommendation = await saveSnapshot(selection._id, {
@@ -103,6 +124,11 @@ export const calculateForSelection = async (selectionId, user) => {
     inputSnapshot: plan.inputSnapshot,
     options: plan.options,
     oneTimeOption: plan.oneTimeOption,
+    projection: {
+      ...plan.projection,
+      // Report missing rules by the settings key an admin would set.
+      missingRules: plan.projection.missingRules.map(settingKeyForRule),
+    },
     affordabilityStatus: plan.affordabilityStatus,
     suggestedAlternatives: plan.suggestedAlternatives,
     rulesVersionUsed: {

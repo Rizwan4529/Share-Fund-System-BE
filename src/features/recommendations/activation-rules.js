@@ -52,11 +52,35 @@ const RULE_DEFINITIONS = [
     required: true,
     isValid: isMonthList,
   },
+  // Projection rules — optional so a plan can still be calculated without
+  // them; projection-calculation.js marks the projection "not_configured"
+  // when any is missing.
   {
     name: "growthPeriodDays",
     programField: "growthPeriodDays",
     settingKey: SETTING_KEYS.GROWTH_PERIOD_DEFAULT_DAYS,
-    required: false, // informational on each option; not used in the math
+    required: false,
+    isValid: isNonNegativeNumber,
+  },
+  {
+    name: "eligibilityOffsetDays",
+    programField: "eligibilityOffsetDays",
+    settingKey: SETTING_KEYS.GROWTH_PERIOD_ELIGIBILITY_OFFSET_DAYS,
+    required: false,
+    isValid: isNonNegativeNumber,
+  },
+  {
+    name: "fundingStartOffsetDays",
+    programField: "fundingStartOffsetDays",
+    settingKey: SETTING_KEYS.PROJECTION_FUNDING_START_OFFSET_DAYS,
+    required: false,
+    isValid: isNonNegativeNumber,
+  },
+  {
+    name: "fundingRangeDays",
+    programField: "fundingRangeDays",
+    settingKey: SETTING_KEYS.PROJECTION_FUNDING_RANGE_DAYS,
+    required: false,
     isValid: isNonNegativeNumber,
   },
   {
@@ -139,6 +163,10 @@ export const resolveActivationRules = async (program) => {
 
   return { resolved, settingsUsed };
 };
+
+/** The settings key a rule falls back to (for "not configured" reporting). */
+export const settingKeyForRule = (name) =>
+  RULE_DEFINITIONS.find((rule) => rule.name === name)?.settingKey ?? name;
 
 /** { name: { value, source } } → { name: value } for the pure calculation. */
 export const ruleValues = (resolved) =>

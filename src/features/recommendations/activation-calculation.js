@@ -1,4 +1,5 @@
 import { ENUMS } from "#/utils/constants.js";
+import { calculateProjections } from "./projection-calculation.js";
 
 /*
  * Activation requirement calculation — PURE: no DB, no settings reads, no
@@ -143,9 +144,18 @@ const buildSuggestedAlternatives = ({
  * @param {object} input.financials  SuccessProfile.financials
  * @param {object} input.rules  plain values: activationPercentage,
  *   roundingIncrement, planMonthOptions, and optional percentageMin/Max,
- *   growthPeriodDays, minGoalAmount, maxGoalAmount
+ *   minGoalAmount, maxGoalAmount, plus the projection rules
+ *   (growthPeriodDays, eligibilityOffsetDays, fundingStartOffsetDays,
+ *   fundingRangeDays)
+ * @param {object} input.projectionContext  { goalNature, basisDate, basis }
+ *   — see projection-calculation.js
  */
-export const calculateActivationPlan = ({ goalAmount, financials, rules }) => {
+export const calculateActivationPlan = ({
+  goalAmount,
+  financials,
+  rules,
+  projectionContext,
+}) => {
   const activationPercentage = clamp(
     rules.activationPercentage,
     rules.percentageMin,
@@ -161,7 +171,7 @@ export const calculateActivationPlan = ({ goalAmount, financials, rules }) => {
     .sort((a, b) => a - b)
     .slice(0, PLAN_LABELS.length);
 
-  const options = monthOptions.map((months, index) => {
+  const pacedOptions = monthOptions.map((months, index) => {
     const scheduledPayment = roundUpToIncrement(
       totalActivationRequirement / months,
       rules.roundingIncrement,
@@ -177,6 +187,14 @@ export const calculateActivationPlan = ({ goalAmount, financials, rules }) => {
       affordable: scheduledPayment <= snapshot.safeCapacity,
     };
   });
+
+  // Timeline + funding range estimates, in the same pass as the figures.
+  const { projection, optionProjections, oneTimeProjection } =
+    calculateProjections({ options: pacedOptions, rules, ...projectionContext });
+  const options = pacedOptions.map((option, index) => ({
+    ...option,
+    projection: optionProjections[index],
+  }));
 
   const withinGoalRange =
     (rules.minGoalAmount == null || goalAmount >= rules.minGoalAmount) &&
@@ -194,7 +212,12 @@ export const calculateActivationPlan = ({ goalAmount, financials, rules }) => {
     totalActivationRequirement,
     inputSnapshot: snapshot,
     options,
-    oneTimeOption: { totalActivationRequirement, payFullNow: true },
+    oneTimeOption: {
+      totalActivationRequirement,
+      payFullNow: true,
+      projection: oneTimeProjection,
+    },
+    projection,
     affordabilityStatus,
     suggestedAlternatives: buildSuggestedAlternatives({
       status: affordabilityStatus,

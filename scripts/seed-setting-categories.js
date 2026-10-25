@@ -18,6 +18,7 @@ const LABELS = {
   [ENUMS.SETTING_CATEGORY.GROWTH_PERIOD]: "Growth period",
   [ENUMS.SETTING_CATEGORY.QUEUE]: "Queue",
   [ENUMS.SETTING_CATEGORY.STATISTICAL_PRICING]: "Statistical pricing",
+  [ENUMS.SETTING_CATEGORY.PROJECTION]: "Projection",
 };
 
 const seed = async () => {

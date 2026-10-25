@@ -215,6 +215,22 @@ export const ENUMS = {
     INCREASE_INCOME_FIRST: "increase_income_first",
     NOT_CURRENTLY_ELIGIBLE: "not_currently_eligible",
   },
+  // Projections are estimates, never guarantees. "not_configured" = a
+  // projection rule is missing from the program and settings.
+  PROJECTION_STATUS: {
+    PROJECTED: "projected",
+    NOT_CONFIGURED: "not_configured",
+  },
+  // The date a projection's growth period is assumed to start from.
+  PROJECTION_BASIS: {
+    CALCULATION_DATE: "calculation_date",
+    ACTIVATION_PAID_DATE: "activation_paid_date",
+  },
+  // The date the estimated funding range is counted from.
+  PROJECTION_FUNDING_ANCHOR: {
+    ELIGIBILITY_DATE: "eligibility_date",
+    ACTIVATION_COMPLETION_DATE: "activation_completion_date",
+  },
   PROGRAM_CYCLE_REACTIVATION_STATUS: {
     NOT_DUE: "not_due",
     PENDING: "pending",
@@ -298,6 +314,7 @@ export const ENUMS = {
     GROWTH_PERIOD: "growthPeriod",
     QUEUE: "queue",
     STATISTICAL_PRICING: "statisticalPricing",
+    PROJECTION: "projection",
   },
   SETTINGS_DATA_TYPE: {
     NUMBER: "number",
@@ -613,12 +630,24 @@ export const SETTING_KEYS = {
   ACTIVATION_PLAN_MONTH_OPTIONS: "activation.planMonthOptions", // number[]
   ACTIVATION_MIN_GOAL_AMOUNT: "activation.minGoalAmount", // optional bound
   ACTIVATION_MAX_GOAL_AMOUNT: "activation.maxGoalAmount", // optional bound
-  GROWTH_PERIOD_DEFAULT_DAYS: "growthPeriod.defaultDays", // optional, informational
+  // Projection rules (optional: without them the plan is still calculated,
+  // but its projection is marked "not_configured").
+  GROWTH_PERIOD_DEFAULT_DAYS: "growthPeriod.defaultDays", // e.g. 45
+  // Days after the growth period ends until eligibility (1 → "Day 46").
+  GROWTH_PERIOD_ELIGIBILITY_OFFSET_DAYS: "growthPeriod.eligibilityOffsetDays",
+  // Days after the funding anchor date that the earliest support is estimated.
+  PROJECTION_FUNDING_START_OFFSET_DAYS: "projection.fundingStartOffsetDays",
+  // Width of the estimated funding range, earliest → latest, in days.
+  PROJECTION_FUNDING_RANGE_DAYS: "projection.fundingRangeDays",
   // [{ key, label, price, programAllowance }] — the Funding Access plans.
   PRICING_FUNDING_ACCESS_PLANS: "pricing.fundingAccessPlans",
   // { code: "USD" } — checkout currency (settings values can't be strings).
   PRICING_CURRENCY: "pricing.currency",
 };
+
+/** Stored on every recommendation projection so any reader shows it as an estimate. */
+export const PROJECTION_NOTICE =
+  "Projected estimate for planning only. Not a guarantee of funding, amounts, or timing.";
 
 /** Program statuses participants may browse (draft/in_development/inactive stay hidden). */
 export const PARTICIPANT_VISIBLE_PROGRAM_STATUSES = [
