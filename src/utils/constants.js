@@ -630,6 +630,9 @@ export const PAGINATION = {
   MAX_LIMIT: 100,
 };
 
+// How many recent payments the participant dashboard lists (display only).
+export const DASHBOARD_RECENT_PAYMENTS_LIMIT = 5;
+
 /**
  * Settings-collection keys the activation calculation reads. Only the KEYS
  * live in code — values live in the settings collection (seed:
