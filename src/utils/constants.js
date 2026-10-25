@@ -215,6 +215,18 @@ export const ENUMS = {
     INCREASE_INCOME_FIRST: "increase_income_first",
     NOT_CURRENTLY_ELIGIBLE: "not_currently_eligible",
   },
+  // Admin oversight of a computed recommendation.
+  RECOMMENDATION_REVIEW_STATUS: {
+    PENDING_REVIEW: "pending_review",
+    APPROVED: "approved",
+    ADJUSTED: "adjusted",
+  },
+  RECOMMENDATION_SORT_BY: {
+    DATE: "date",
+    NAME: "name",
+    REVIEW_STATUS: "reviewStatus",
+    AFFORDABILITY: "affordability",
+  },
   // Projections are estimates, never guarantees. "not_configured" = a
   // projection rule is missing from the program and settings.
   PROJECTION_STATUS: {
@@ -363,6 +375,8 @@ export const ENUMS = {
     UPDATE_SETTING: "updated_setting",
     CREATED_SETTING: "created_setting",
     ADJUSTED_RECOMMENDATION: "adjusted_recommendation",
+    APPROVED_RECOMMENDATION: "approved_recommendation",
+    RESET_RECOMMENDATION: "reset_recommendation",
     PROCESSED_REFUND: "processed_refund",
     DEACTIVATED_CATEGORY: "deactivated_category",
     ASSIGNED_FOUNDER_NUMBER: "assigned_founder_number",
@@ -644,6 +658,9 @@ export const SETTING_KEYS = {
   // { code: "USD" } — checkout currency (settings values can't be strings).
   PRICING_CURRENCY: "pricing.currency",
 };
+
+/** Key for the one-time option in admin adjustments (paced plans use RECOMMENDATION_LABEL). */
+export const RECOMMENDATION_ONE_TIME_KEY = "one_time";
 
 /** Stored on every recommendation projection so any reader shows it as an estimate. */
 export const PROJECTION_NOTICE =

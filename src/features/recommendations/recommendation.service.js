@@ -13,6 +13,7 @@ import {
   calculateActivationPlan,
   resolveGoalAmount,
 } from "./activation-calculation.js";
+import { toParticipantView } from "./recommendation-effective.js";
 
 const findOwnedSelection = async (selectionId, user) => {
   // Scoped to the owner: someone else's selection reads as "not found".
@@ -44,15 +45,30 @@ const projectionBasisFor = (selection) =>
       }
     : { basis: ENUMS.PROJECTION_BASIS.CALCULATION_DATE, basisDate: new Date() };
 
-/** Upsert the single snapshot for a selection (a lost upsert race retries). */
+/**
+ * Upsert the single snapshot for a selection (a lost upsert race retries).
+ * A new computed result needs a fresh admin review, so current overrides and
+ * approval are cleared; the adminAdjustments history is kept.
+ */
 const saveSnapshot = async (selectionId, fields) => {
   const write = () =>
     Recommendation.findOneAndUpdate(
       { selectionId },
       {
-        $set: { ...fields, selectionId, adminAdjusted: false },
+        $set: {
+          ...fields,
+          selectionId,
+          adminAdjusted: false,
+          adminOverrides: [],
+          reviewStatus: ENUMS.RECOMMENDATION_REVIEW_STATUS.PENDING_REVIEW,
+        },
         // A previously chosen plan may not exist in the new options.
-        $unset: { selectedOption: 1 },
+        $unset: {
+          selectedOption: 1,
+          approvedBy: 1,
+          approvedAt: 1,
+          adjustmentReason: 1,
+        },
       },
       { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true },
     );
@@ -146,14 +162,14 @@ export const calculateForSelection = async (selectionId, user) => {
       goalAmount: plan.goalAmount,
       activationPercentage: plan.activationPercentage,
       totalActivationRequirement: plan.totalActivationRequirement,
-      recommendation,
+      recommendation: toParticipantView(recommendation),
     },
   };
 };
 
 export const getForSelection = async (selectionId, user) => {
   await findOwnedSelection(selectionId, user);
-  const recommendation = await Recommendation.findOne({ selectionId });
+  const recommendation = await Recommendation.findOne({ selectionId }).lean();
   if (!recommendation)
     throw new AppError(
       "No activation plan has been calculated for this selection yet",
@@ -162,29 +178,7 @@ export const getForSelection = async (selectionId, user) => {
   return {
     success: true,
     message: "Activation plan retrieved successfully",
-    data: recommendation,
-  };
-};
-
-export const getForSelectionAsAdmin = async (selectionId) => {
-  const recommendation = await Recommendation.findOne({ selectionId })
-    .populate("userId", "firstName lastName email")
-    .populate({
-      path: "selectionId",
-      select: "programId categoryId obligationType goalAmount pricingSource verifiedQuoteAmount status",
-      populate: [
-        { path: "programId", select: "name programType goalNature" },
-        { path: "categoryId", select: "name" },
-      ],
-    });
-  if (!recommendation)
-    throw new AppError(
-      "No activation plan has been calculated for this selection",
-      HTTP_STATUS.NOT_FOUND,
-    );
-  return {
-    success: true,
-    message: "Activation plan retrieved successfully",
-    data: recommendation,
+    // Effective figures: admin overrides applied, computed originals hidden.
+    data: toParticipantView(recommendation),
   };
 };

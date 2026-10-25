@@ -8,6 +8,7 @@ import FounderPurchase from "#/features/founder-purchases/founder-purchase.model
 import SuccessCenterSelection from "#/features/success-center-selections/success-center-selection.model.js";
 import SuccessCenterProgram from "#/features/success-center-programs/success-center-program.model.js";
 import Recommendation from "#/features/recommendations/recommendation.model.js";
+import { buildEffective } from "#/features/recommendations/recommendation-effective.js";
 
 /*
  * The ONLY place a checkout amount is decided. Every amount comes from a
@@ -126,12 +127,14 @@ const resolveProgramActivation = async (referenceId, user) => {
     throw unresolved("Planning-only programs don't need an activation payment.");
   if (!recommendation)
     throw unresolved("Calculate your activation plan before paying.");
+  // Charge what the participant sees: computed figures + any admin overrides.
+  const plan = buildEffective(recommendation);
 
   const eligible = [
     ENUMS.RECOMMENDATION_AFFORDABILITY_STATUS.ELIGIBLE,
     ENUMS.RECOMMENDATION_AFFORDABILITY_STATUS.ELIGIBLE_WITH_ADJUSTMENT,
   ];
-  if (!eligible.includes(recommendation.affordabilityStatus))
+  if (!eligible.includes(plan.affordabilityStatus))
     throw paymentError(
       "Your activation plan isn't eligible for payment yet — see the suggestions on your plan.",
       HTTP_STATUS.UNPROCESSABLE_ENTITY,
@@ -141,7 +144,7 @@ const resolveProgramActivation = async (referenceId, user) => {
   // Full one-time activation only for now.
   // TODO(installments): charge a chosen paced option's scheduledPayment and
   // schedule the remaining installments.
-  const amount = recommendation.oneTimeOption?.totalActivationRequirement;
+  const amount = plan.oneTimeOption?.totalActivationRequirement;
   if (!isPositive(amount))
     throw unresolved("Your activation plan has no amount to pay — recalculate it first.");
 

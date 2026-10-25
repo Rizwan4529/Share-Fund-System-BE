@@ -113,9 +113,50 @@ const recommendationSchema = new Schema(
       type: String,
       enum: Object.values(ENUMS.RECOMMENDATION_LABEL),
     },
+    /* --- Admin oversight (recommendation-review.service.js) ---
+     * The computed fields above are never modified by an admin. Overrides
+     * live in adminOverrides and are applied on read (recommendation-
+     * effective.js), so the computed result stays recoverable. */
     adminAdjusted: {
       type: Boolean,
       default: false,
+    },
+    reviewStatus: {
+      type: String,
+      enum: Object.values(ENUMS.RECOMMENDATION_REVIEW_STATUS),
+      default: ENUMS.RECOMMENDATION_REVIEW_STATUS.PENDING_REVIEW,
+    },
+    approvedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    approvedAt: { type: Date },
+    // The reason given with the latest adjustment.
+    adjustmentReason: { type: String, trim: true },
+    // Current overrides, one per field path, e.g.
+    // { field: "options.fast.scheduledPayment", value: 450 }.
+    adminOverrides: {
+      type: [
+        {
+          _id: false,
+          field: { type: String, required: true },
+          value: { type: Schema.Types.Mixed },
+        },
+      ],
+      default: [],
+    },
+    // Append-only history of every admin change to a field.
+    adminAdjustments: {
+      type: [
+        {
+          _id: false,
+          field: { type: String, required: true },
+          originalValue: { type: Schema.Types.Mixed }, // computed value
+          previousValue: { type: Schema.Types.Mixed }, // effective before
+          newValue: { type: Schema.Types.Mixed }, // effective after
+          reason: { type: String, trim: true },
+          adjustedBy: { type: Schema.Types.ObjectId, ref: "User" },
+          adjustedAt: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
     },
     rulesVersionUsed: {
       // Everything needed to reproduce this snapshot: each resolved rule with
