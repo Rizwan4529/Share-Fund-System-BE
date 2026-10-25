@@ -34,6 +34,18 @@ export const getSetting = async (key) => {
   return setting.value;
 };
 
+/**
+ * Batch read for config consumers (e.g. the activation calculation). Unlike
+ * getSetting, a missing key is not an error — it's simply absent from the
+ * returned Map so callers can decide whether that key is optional.
+ */
+export const getSettingsByKeys = async (keys) => {
+  const settings = await Setting.find({ key: { $in: keys } })
+    .select("key value versionHistory updatedAt")
+    .lean();
+  return new Map(settings.map((setting) => [setting.key, setting]));
+};
+
 export const getSettingByKey = async (key) => {
   const setting = await findSettingByKey(key);
   return {

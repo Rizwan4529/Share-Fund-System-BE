@@ -31,7 +31,7 @@ const withTrailingSlash = (url) => {
   return url.endsWith("/") ? url : `${url}/`;
 };
 
-const getFrontendBaseUrl = () =>
+export const getFrontendBaseUrl = () =>
   withTrailingSlash(process.env.FRONTEND_BASE_URL || "");
 
 const resolveAssetUrl = (envValue, relativePath) => {
@@ -85,7 +85,13 @@ export const renderEmailTemplate = (templateName, vars = {}) => {
   const inner = loadHtml(templateName);
   const html = layout.replace("{{content}}", () => inner);
 
+  // Every extra var is HTML-escaped; the named ones below keep their defaults.
+  const extraVars = Object.fromEntries(
+    Object.entries(vars).map(([key, value]) => [key, escapeHtml(value)]),
+  );
+
   return interpolate(html, {
+    ...extraVars,
     ...brand,
     ...assets,
     mailIconInner: mailIconInner(assets.mailIconUrl, brand.colorNavyDeep),

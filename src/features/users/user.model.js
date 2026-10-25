@@ -172,12 +172,24 @@ const userSchema = new Schema(
     },
     status: {
       type: String,
-      enum: [ENUMS.AUTH_STATUS.ACTIVE, ENUMS.AUTH_STATUS.PENDING_VERIFICATION],
+      enum: [
+        ENUMS.AUTH_STATUS.ACTIVE,
+        ENUMS.AUTH_STATUS.PENDING_VERIFICATION,
+        // Set by admins (Part B access actions).
+        ENUMS.AUTH_STATUS.SUSPENDED,
+        ENUMS.AUTH_STATUS.CLOSED,
+      ],
       default: ENUMS.AUTH_STATUS.PENDING_VERIFICATION,
     },
     emailVerified: {
       type: Boolean,
       default: false,
+    },
+    planningAccessStatus: {
+      // Turned on only by a webhook-confirmed Funding Access payment.
+      type: String,
+      enum: Object.values(ENUMS.PLANNING_ACCESS_STATUS),
+      default: ENUMS.PLANNING_ACCESS_STATUS.INACTIVE,
     },
   },
   {

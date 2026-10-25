@@ -14,6 +14,17 @@ import successCenterCategoryRoutes from "#/features/success-center-categories/su
 import settingCategoryRoutes from "#/features/setting-categories/setting-category.routes.js";
 import waitlistRoutes from "#/features/waitlist/waitlist.routes.js";
 import waitlistCampaignCategoryRoutes from "#/features/waitlist-campaign-categories/waitlist-campaign-category.routes.js";
+import successProfileRoutes from "#/features/success-profiles/success-profile.routes.js";
+import adminParticipantRoutes from "#/features/admin-participants/admin-participant.routes.js";
+import successCenterRoutes from "#/features/success-centers/success-center.routes.js";
+import successCenterSelectionRoutes from "#/features/success-center-selections/success-center-selection.routes.js";
+import activationRoutes, {
+  adminRecommendationRouter,
+} from "#/features/recommendations/recommendation.routes.js";
+import paymentRoutes from "#/features/payments/payment.routes.js";
+import adminReportRoutes from "#/features/admin-reports/admin-report.routes.js";
+import participantStatusRoutes from "#/features/participant-status/participant-status.routes.js";
+import { stripeWebhook } from "#/features/payments/payment.controller.js";
 const app = express();
 
 app.use(
@@ -42,6 +53,14 @@ app.use(
   }),
 );
 
+// Stripe webhook needs the RAW body for signature verification, so it is
+// registered before the JSON parser.
+app.post(
+  "/api/v1/payments/webhook",
+  express.raw({ type: "application/json", limit: "1mb" }),
+  stripeWebhook,
+);
+
 app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: true, limit: "100kb" }));
 
@@ -68,6 +87,20 @@ app.use("/api/v1/legal-acceptances", legalAcceptanceRoutes);
 app.use("/api/v1/audit-logs", auditLogRoutes);
 app.use("/api/v1/success-center-categories", successCenterCategoryRoutes);
 app.use("/api/v1/success-center-programs", successCenterProgramRoutes);
+app.use("/api/v1/success-profile", successProfileRoutes);
+app.use("/api/v1/admin/participants", adminParticipantRoutes);
+app.use(
+  "/api/v1/success-centers/selections",
+  successCenterSelectionRoutes,
+);
+app.use("/api/v1/success-centers", successCenterRoutes);
+app.use("/api/v1/activation", activationRoutes);
+app.use("/api/v1/admin/recommendations", adminRecommendationRouter);
+app.use("/api/v1/payments", paymentRoutes);
+// Admin read-only reports (enrollments, payments, revenue). Mounted after the
+// more specific /admin/* routers above.
+app.use("/api/v1/admin", adminReportRoutes);
+app.use("/api/v1/me", participantStatusRoutes);
 app.use(
   "/api/v1/waitlist/campaign-categories",
   waitlistCampaignCategoryRoutes,

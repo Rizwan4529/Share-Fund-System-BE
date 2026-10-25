@@ -26,6 +26,10 @@ export const authenticate = async (req, res, next) => {
   const user = await User.findById(decoded.userId);
 
   if (!user) throw new AppError("User not found", HTTP_STATUS.UNAUTHORIZED);
+  // TODO(account-status): admins can now set User.status to suspended/closed
+  // (PATCH /admin/participants/:userId/status) but it is not enforced yet.
+  // Enforcement belongs here (reject suspended/closed non-admin users) and
+  // in the login service.
   req.user = user;
   next();
 };

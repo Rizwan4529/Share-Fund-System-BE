@@ -16,7 +16,9 @@ export const HTTP_STATUS = {
   FORBIDDEN: 403,
   NOT_FOUND: 404,
   CONFLICT: 409,
+  UNPROCESSABLE_ENTITY: 422,
   INTERNAL_SERVER_ERROR: 500,
+  BAD_GATEWAY: 502,
 };
 
 export const FRONTEND_ROUTES = {
@@ -57,6 +59,12 @@ export const EMAIL_ASSET_PATHS = {
 };
 
 export const EMAIL_TEMPLATES = {
+  PAYMENT_RECEIPT: {
+    FILE: "payment-receipt",
+    SUBJECT: "Your Share Fund System receipt",
+    PREHEADER: "Payment confirmed — here are your receipt details.",
+    TEXT: "Hi {{firstName}},\n\nWe've received your payment.\n\nPurchase: {{description}}\nAmount: {{amount}}\nDate: {{paymentDate}}\nTransaction reference: {{transactionRef}}\n\nThis payment covers your plan/activation only — it is not a guarantee of funding outcomes.\n\nThank you,\nShare Fund System",
+  },
   VERIFY_EMAIL: {
     FILE: "verify-email",
     SUBJECT: "Verify your email address",
@@ -76,6 +84,8 @@ export const ENUMS = {
     INACTIVE: "inactive",
     BLOCKED: "blocked",
     DELETED: "deleted",
+    SUSPENDED: "suspended",
+    CLOSED: "closed",
   },
   CONTACT_METHODS: {
     EMAIL: "email",
@@ -361,6 +371,11 @@ export const ENUMS = {
     CREATED_WAITLIST_CAMPAIGN_CATEGORY: "created_waitlist_campaign_category",
     UPDATED_WAITLIST_CAMPAIGN_CATEGORY: "updated_waitlist_campaign_category",
     DELETED_WAITLIST_CAMPAIGN_CATEGORY: "deleted_waitlist_campaign_category",
+    COMPLETED_SUCCESS_PROFILE: "completed_success_profile",
+    COMPLETED_PAYMENT: "completed_payment",
+    UPDATED_PARTICIPANT_STATUS: "updated_participant_status",
+    UPDATED_PARTICIPANT_ACCESS: "updated_participant_access",
+    FAILED_PAYMENT: "failed_payment",
   },
   AUDIT_LOG_TARGET_TYPE: {
     USER: "User",
@@ -437,6 +452,28 @@ export const ENUMS = {
   PAYMENT_PROVIDER: {
     STRIPE: "stripe",
   },
+  PAYMENT_PURPOSE: {
+    FUNDING_ACCESS: "funding_access",
+    FOUNDER_TIER: "founder_tier",
+    PROGRAM_ACTIVATION: "program_activation",
+  },
+  // Machine-readable reasons checkout can't start (sent in `errors`).
+  PAYMENT_ERROR_CODE: {
+    EMAIL_NOT_VERIFIED: "EMAIL_NOT_VERIFIED",
+    ACKNOWLEDGMENT_REQUIRED: "ACKNOWLEDGMENT_REQUIRED",
+    ACKNOWLEDGMENT_OUTDATED: "ACKNOWLEDGMENT_OUTDATED",
+    AMOUNT_UNRESOLVED: "AMOUNT_UNRESOLVED",
+    ALREADY_PAID: "ALREADY_PAID",
+    NOT_ELIGIBLE: "NOT_ELIGIBLE",
+  },
+  PLANNING_ACCESS_STATUS: {
+    INACTIVE: "inactive",
+    ACTIVE: "active",
+  },
+  SELECTION_ACTIVATION_STATUS: {
+    UNPAID: "unpaid",
+    PAID: "paid",
+  },
   PAYMENT_STATUS: {
     PENDING: "pending",
     COMPLETED: "completed",
@@ -484,4 +521,112 @@ export const ENUMS = {
     SIMULATION: "simulation",
     LIVE: "live",
   },
+  // Admin participants list: standing is derived from foundingParticipant +
+  // founderTier on the User (a set tier wins over the plain flag).
+  PARTICIPANT_STANDING: {
+    NONE: "none",
+    FOUNDING_PARTICIPANT: "founding_participant",
+    ESSENTIAL_100: "essential_100",
+    EXPANDED_500: "expanded_500",
+    PREMIUM_1000: "premium_1000",
+  },
+  PARTICIPANT_QUESTIONNAIRE_FILTER: {
+    COMPLETE: "complete",
+    INCOMPLETE: "incomplete",
+  },
+  PARTICIPANT_SORT_BY: {
+    NAME: "name",
+    EMAIL: "email",
+    STATUS: "status",
+    QUESTIONNAIRE: "questionnaire",
+    CREATED_AT: "createdAt",
+    LAST_ACTIVE_AT: "lastActiveAt",
+  },
+  SORT_ORDER: {
+    ASC: "asc",
+    DESC: "desc",
+  },
+  // Account states an admin can set on a participant (User.status).
+  ADMIN_SETTABLE_ACCOUNT_STATUS: {
+    ACTIVE: "active",
+    SUSPENDED: "suspended",
+    CLOSED: "closed",
+  },
+  // Unified admin "enrollment" rows (purchases + program activations).
+  ENROLLMENT_STATUS: {
+    ACTIVE: "active",
+    PENDING: "pending",
+    FAILED: "failed",
+    REMOVED: "removed",
+  },
+  ENROLLMENT_SORT_BY: {
+    DATE: "date",
+    NAME: "name",
+    EMAIL: "email",
+    TYPE: "type",
+    STATUS: "status",
+  },
+  ADMIN_PAYMENT_SORT_BY: {
+    DATE: "date",
+    AMOUNT: "amount",
+    STATUS: "status",
+    NAME: "name",
+  },
+  // Machine-readable reasons a plan can't be calculated (sent in `errors`).
+  ACTIVATION_ERROR_CODE: {
+    SELECTION_REMOVED: "SELECTION_REMOVED",
+    PROFILE_REQUIRED: "PROFILE_REQUIRED",
+    INCOME_REQUIRED: "INCOME_REQUIRED",
+    GOAL_AMOUNT_REQUIRED: "GOAL_AMOUNT_REQUIRED",
+  },
 };
+
+export const PARTICIPANT_STANDING_LABELS = {
+  [ENUMS.PARTICIPANT_STANDING.NONE]: "Not active",
+  [ENUMS.PARTICIPANT_STANDING.FOUNDING_PARTICIPANT]: "Founding Participant",
+  [ENUMS.PARTICIPANT_STANDING.ESSENTIAL_100]: "Founder · Essential",
+  [ENUMS.PARTICIPANT_STANDING.EXPANDED_500]: "Founder · Expanded",
+  [ENUMS.PARTICIPANT_STANDING.PREMIUM_1000]: "Founder · Premium",
+};
+
+// TODO: no stored source for the allowance of participants without a founder
+// plan yet; move this into the settings engine once Todd confirms the number.
+export const DEFAULT_SUCCESS_CENTER_LIMIT = 1;
+
+export const PAGINATION = {
+  DEFAULT_PAGE: 1,
+  DEFAULT_LIMIT: 20,
+  MAX_LIMIT: 100,
+};
+
+/**
+ * Settings-collection keys the activation calculation reads. Only the KEYS
+ * live in code — values live in the settings collection (seed:
+ * scripts/seed-activation-settings.js) and are admin-editable. A program's own
+ * activationRules always win over these global fallbacks.
+ */
+export const SETTING_KEYS = {
+  ACTIVATION_DEFAULT_PERCENTAGE: "activation.defaultPercentage",
+  ACTIVATION_PERCENTAGE_MIN: "activation.percentageMin", // optional bound
+  ACTIVATION_PERCENTAGE_MAX: "activation.percentageMax", // optional bound
+  ACTIVATION_ROUNDING_INCREMENT: "activation.roundingIncrement",
+  ACTIVATION_PLAN_MONTH_OPTIONS: "activation.planMonthOptions", // number[]
+  ACTIVATION_MIN_GOAL_AMOUNT: "activation.minGoalAmount", // optional bound
+  ACTIVATION_MAX_GOAL_AMOUNT: "activation.maxGoalAmount", // optional bound
+  GROWTH_PERIOD_DEFAULT_DAYS: "growthPeriod.defaultDays", // optional, informational
+  // [{ key, label, price, programAllowance }] — the Funding Access plans.
+  PRICING_FUNDING_ACCESS_PLANS: "pricing.fundingAccessPlans",
+  // { code: "USD" } — checkout currency (settings values can't be strings).
+  PRICING_CURRENCY: "pricing.currency",
+};
+
+/** Program statuses participants may browse (draft/in_development/inactive stay hidden). */
+export const PARTICIPANT_VISIBLE_PROGRAM_STATUSES = [
+  ENUMS.SUCCESS_CENTER_PROGRAM_STATUS.PUBLISHED,
+  ENUMS.SUCCESS_CENTER_PROGRAM_STATUS.COMING_SOON,
+];
+
+/** Program statuses a participant may activate (select). */
+export const SELECTABLE_PROGRAM_STATUSES = [
+  ENUMS.SUCCESS_CENTER_PROGRAM_STATUS.PUBLISHED,
+];

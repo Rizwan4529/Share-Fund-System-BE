@@ -32,6 +32,9 @@ export const validateQuery = (schema) => {
   return (req, res, next) => {
     const data = runSchema(schema, req.query);
     Object.assign(req.query, data);
+    // Express 5 re-parses req.query on every access, so coerced values and
+    // defaults are lost there; read parsed values from req.validatedQuery.
+    req.validatedQuery = data;
     next();
   };
 };

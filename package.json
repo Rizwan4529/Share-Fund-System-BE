@@ -12,6 +12,8 @@
     "seed:legal-documents:force": "node scripts/seed-legal-documents.js --force",
     "publish:legal-documents": "node scripts/publish-legal-documents-api.js",
     "seed:waitlist-campaign-categories": "node scripts/seed-waitlist-campaign-categories.js",
+    "seed:activation-settings": "node scripts/seed-activation-settings.js",
+    "seed:payment-settings": "node scripts/seed-payment-settings.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -40,6 +42,7 @@
     "libphonenumber-js": "^1.13.11",
     "mongoose": "^9.9.0",
     "nodemailer": "^9.0.5",
+    "stripe": "^23.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

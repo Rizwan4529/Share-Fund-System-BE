@@ -12,9 +12,40 @@ const paymentSchema = new Schema(
       index: true,
     },
     purchaseId: {
+      // Set when a funding_access / founder_tier payment is fulfilled; a
+      // program_activation payment has no purchase.
       type: Schema.Types.ObjectId,
       ref: "FounderPurchase",
-      required: [true, "Purchase is required"],
+    },
+    purpose: {
+      type: String,
+      enum: Object.values(ENUMS.PAYMENT_PURPOSE),
+      required: [true, "Payment purpose is required"],
+    },
+    referenceId: {
+      // What is being paid for: a Funding Access plan key, a FounderPlan id,
+      // or a SuccessCenterSelection id (depends on purpose).
+      type: String,
+      trim: true,
+      required: [true, "Payment reference is required"],
+    },
+    description: {
+      // Human-readable purchase name, frozen at checkout for receipts/history.
+      type: String,
+      trim: true,
+    },
+    checkoutSessionId: {
+      type: String,
+      trim: true,
+    },
+    legalAcceptanceId: {
+      // The checkout acknowledgment version accepted for this payment.
+      type: Schema.Types.ObjectId,
+      ref: "LegalAcceptance",
+    },
+    failureReason: {
+      type: String,
+      trim: true,
     },
     amount: {
       type: Number,
@@ -33,10 +64,10 @@ const paymentSchema = new Schema(
       required: [true, "Provider is required"],
     },
     providerTransactionRef: {
+      // Stripe PaymentIntent id — only known once the payment succeeds.
+      // Unique (see index below) so one charge can't be recorded twice.
       type: String,
       trim: true,
-      unique: true,
-      required: [true, "Provider transaction reference is required"],
     },
     status: {
       type: String,
@@ -45,8 +76,8 @@ const paymentSchema = new Schema(
       required: [true, "Status is required"],
     },
     paymentDate: {
+      // Set when the webhook confirms the payment.
       type: Date,
-      required: [true, "Payment date is required"],
     },
     refundDeadline: {
       type: Date,
@@ -81,6 +112,17 @@ const paymentSchema = new Schema(
   },
   { timestamps: true },
 );
+
+// Unique only once set — pending payments don't have a Stripe charge yet.
+paymentSchema.index(
+  { providerTransactionRef: 1 },
+  { unique: true, partialFilterExpression: { providerTransactionRef: { $type: "string" } } },
+);
+paymentSchema.index(
+  { checkoutSessionId: 1 },
+  { unique: true, partialFilterExpression: { checkoutSessionId: { $type: "string" } } },
+);
+paymentSchema.index({ userId: 1, createdAt: -1 });
 
 const Payment = model("Payment", paymentSchema);
 
