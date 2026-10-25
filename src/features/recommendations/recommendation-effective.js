@@ -122,15 +122,25 @@ const ADMIN_ONLY_FIELDS = [
   "adminAdjustments",
   "adjustmentReason",
   "approvedBy",
+  "approvedAt",
 ];
 
+// Which fields an admin changed — participants just see the effective plan.
+const withoutAdjustedFields = ({ adjustedFields: _ignored, ...option } = {}) => option;
+
 /**
- * What participants (and payment pricing) see: effective figures, projection
- * labels kept, admin internals removed.
+ * What participants see: effective figures with projection labels kept, and
+ * no admin internals (overrides, history, reasons, which fields changed).
  */
 export const toParticipantView = (rec) => {
   const plain = toPlain(rec);
-  const view = { ...plain, ...buildEffective(plain) };
+  const effective = buildEffective(plain);
+  const view = {
+    ...plain,
+    affordabilityStatus: effective.affordabilityStatus,
+    options: effective.options.map(withoutAdjustedFields),
+    oneTimeOption: withoutAdjustedFields(effective.oneTimeOption),
+  };
   for (const field of ADMIN_ONLY_FIELDS) delete view[field];
   view.reviewStatus ??= ENUMS.RECOMMENDATION_REVIEW_STATUS.PENDING_REVIEW;
   return view;
