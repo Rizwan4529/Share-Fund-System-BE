@@ -88,3 +88,18 @@ export const authorize = (...roles) => {
     next();
   };
 };
+
+/**
+ * For participant writes (Success Profile, program selection, activation):
+ * the UI already sends unverified users to /verify; this keeps the API in
+ * line with it. Run after authenticate.
+ */
+export const requireVerifiedEmail = (req, res, next) => {
+  if (!req.user?.emailVerified)
+    throw new AppError(
+      "Verify your email address to continue.",
+      HTTP_STATUS.FORBIDDEN,
+      [{ code: ENUMS.AUTH_ERROR_CODE.EMAIL_NOT_VERIFIED }],
+    );
+  next();
+};

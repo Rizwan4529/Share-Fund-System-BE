@@ -4,7 +4,9 @@ import { calculateCompletionPercentage } from "./success-profile.completion.js";
 
 const { Schema, model } = mongoose;
 
-const optionalAmount = { type: Number, min: 0, default: 0 };
+// No default: an unanswered figure stays empty so a real $0 answer can be
+// told apart from a skipped question (calculations treat missing as 0).
+const optionalAmount = { type: Number, min: 0 };
 const optionalText = { type: String, trim: true };
 
 const successProfileSchema = new Schema(
@@ -60,6 +62,11 @@ const successProfileSchema = new Schema(
       goalPriorities: optionalText,
     },
     accuracyConfirmed: {
+      type: Boolean,
+      default: false,
+    },
+    // The participant acknowledged recommendations and timelines are estimates.
+    estimatesAcknowledged: {
       type: Boolean,
       default: false,
     },

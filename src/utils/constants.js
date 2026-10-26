@@ -648,6 +648,10 @@ export const ENUMS = {
     VERIFICATION_LINK_EXPIRED: "VERIFICATION_LINK_EXPIRED",
     VERIFICATION_LINK_INVALID: "VERIFICATION_LINK_INVALID",
     TOO_MANY_REQUESTS: "TOO_MANY_REQUESTS",
+    EMAIL_NOT_VERIFIED: "EMAIL_NOT_VERIFIED",
+  },
+  SUCCESS_PROFILE_ERROR_CODE: {
+    PROFILE_INCOMPLETE: "PROFILE_INCOMPLETE",
   },
 };
 
@@ -710,6 +714,14 @@ export const ADMIN_OVERVIEW_ACTIVITY_LIMIT = 10;
  * scripts/seed-activation-settings.js) and are admin-editable. A program's own
  * activationRules always win over these global fallbacks.
  */
+/** The fixed percentage behind each preset discretionary rule (custom has none). */
+export const DISCRETIONARY_RULE_PERCENTAGES = {
+  [ENUMS.DISCRETIONARY_RULE_LABEL.WEALTH_PRESERVATION_10]: 10,
+  [ENUMS.DISCRETIONARY_RULE_LABEL.CONSERVATIVE_20]: 20,
+  [ENUMS.DISCRETIONARY_RULE_LABEL.MODERATE_30]: 30,
+  [ENUMS.DISCRETIONARY_RULE_LABEL.FLEXIBLE_40]: 40,
+};
+
 export const SETTING_KEYS = {
   ACTIVATION_DEFAULT_PERCENTAGE: "activation.defaultPercentage",
   ACTIVATION_PERCENTAGE_MIN: "activation.percentageMin", // optional bound

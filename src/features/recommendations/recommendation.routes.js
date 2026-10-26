@@ -4,7 +4,11 @@ import {
   validateParams,
   validateQuery,
 } from "#/middleware/validate.middleware.js";
-import { authenticate, authorize } from "#/middleware/auth.middleware.js";
+import {
+  authenticate,
+  authorize,
+  requireVerifiedEmail,
+} from "#/middleware/auth.middleware.js";
 import { ENUMS } from "#/utils/constants.js";
 import {
   adjustRecommendationSchema,
@@ -28,7 +32,12 @@ import {
 const router = express.Router();
 router.use(authenticate);
 
-router.post("/calculate", validate(calculateActivationSchema), calculateActivation);
+router.post(
+  "/calculate",
+  requireVerifiedEmail,
+  validate(calculateActivationSchema),
+  calculateActivation,
+);
 router.get(
   "/selection/:selectionId",
   validateParams(selectionIdParamSchema),

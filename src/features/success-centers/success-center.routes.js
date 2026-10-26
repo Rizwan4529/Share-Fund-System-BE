@@ -1,6 +1,6 @@
 import express from "express";
 import { validateParams } from "#/middleware/validate.middleware.js";
-import { authenticate } from "#/middleware/auth.middleware.js";
+import { optionalAuthenticate } from "#/middleware/auth.middleware.js";
 import {
   categoryIdParamSchema,
   programIdParamSchema,
@@ -13,8 +13,9 @@ import {
 
 const router = express.Router();
 
-// Participant browsing: login required, no payment or selection check.
-router.use(authenticate);
+// Browsing is free and public (brief: browse Success Centers before
+// registering). Read-only; a logged-in caller is still recognised.
+router.use(optionalAuthenticate);
 
 router.get("/categories", listCategories);
 router.get(

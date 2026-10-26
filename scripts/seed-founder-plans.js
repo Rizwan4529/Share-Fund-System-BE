@@ -6,64 +6,75 @@ import SuccessCenterCategory from "#/features/success-center-categories/success-
 import SuccessCenterProgram from "#/features/success-center-programs/success-center-program.model.js";
 import FounderPlan from "#/features/founder-plans/founder-plan.model.js";
 
+// The eight approved Success Center categories (brief §4), in display order.
 const CATEGORIES = [
   {
     slug: "housing",
     name: "Housing",
-    description: "Rent, mortgage, deposits, and moving goals.",
+    description:
+      "Plan for rent, mortgage, deposits, home purchases, moving expenses, and other housing-related goals.",
+  },
+  {
+    slug: "food-groceries",
+    legacySlug: "food-household",
+    name: "Food & Groceries",
+    description:
+      "Plan for household food, groceries, and recurring nutritional needs.",
+  },
+  {
+    slug: "utilities",
+    name: "Utilities",
+    description:
+      "Plan for electricity, water, internet, heating, cooling, and other essential household utility expenses.",
+  },
+  {
+    slug: "debt-reduction",
+    legacySlug: "debt-management",
+    name: "Debt Reduction",
+    description:
+      "Plan personalized goals for reducing credit cards, loans, past-due balances, and other personal debt.",
   },
   {
     slug: "transportation",
     name: "Transportation",
-    description: "Vehicle purchase and commuting goals.",
-  },
-  {
-    slug: "debt-management",
-    name: "Debt Management",
-    description: "Reduce and organize personal debt.",
-  },
-  {
-    slug: "business-growth",
-    name: "Business Growth",
-    description: "Startup, expansion, equipment, and runway.",
+    description: "Plan for vehicle purchase, payments, and transportation needs.",
   },
   {
     slug: "health-medical",
     name: "Health & Medical",
-    description: "Health-related and medical expense goals.",
+    description:
+      "Plan for medical care, dental treatment, elective procedures, recovery expenses, and eligible health goals.",
   },
   {
-    slug: "food-household",
-    name: "Food and Household Essentials",
-    description: "Groceries, utilities, and everyday essentials.",
-  },
-  {
-    slug: "investments-wealth",
-    name: "Investments and Wealth Building",
-    description: "Savings, investing, and long-term wealth goals.",
+    slug: "business-growth",
+    name: "Business Growth",
+    description:
+      "Plan for business startup, expansion, equipment, inventory, commercial space, staffing, and operational needs.",
   },
   {
     slug: "education",
     name: "Education",
-    description: "Tuition, certifications, and training goals.",
+    description:
+      "Plan for tuition, trade school, professional training, certifications, and career-development goals.",
   },
 ];
 
+// Transportation has exactly these three programs (brief §4).
 const PROGRAMS = [
   { slug: "housing-rent-stabilization", category: "housing", name: "Rent Stabilization" },
   { slug: "housing-deposit", category: "housing", name: "Deposit & Move-In" },
   { slug: "housing-mortgage", category: "housing", name: "Mortgage Readiness" },
+  { slug: "food-groceries", category: "food-groceries", name: "Groceries" },
+  { slug: "utilities-household", category: "utilities", name: "Household Utilities" },
+  { slug: "debt-credit-card", category: "debt-reduction", name: "Credit Card Payoff" },
+  { slug: "debt-consolidation", category: "debt-reduction", name: "Debt Consolidation Plan" },
   { slug: "transportation-vehicle", category: "transportation", name: "Vehicle Purchase" },
-  { slug: "debt-credit-card", category: "debt-management", name: "Credit Card Payoff" },
-  { slug: "debt-consolidation", category: "debt-management", name: "Debt Consolidation Plan" },
-  { slug: "business-startup", category: "business-growth", name: "Startup Launch" },
-  { slug: "business-equipment", category: "business-growth", name: "Equipment & Tools" },
+  { slug: "transportation-payment", category: "transportation", name: "Monthly Vehicle Payment" },
+  { slug: "transportation-fuel", category: "transportation", name: "Gas Card or Fuel Account" },
   { slug: "health-procedure", category: "health-medical", name: "Planned Procedure" },
   { slug: "health-reserve", category: "health-medical", name: "Medical Reserve" },
-  { slug: "food-groceries", category: "food-household", name: "Groceries" },
-  { slug: "food-utilities", category: "food-household", name: "Utilities" },
-  { slug: "investments-emergency-fund", category: "investments-wealth", name: "Emergency Fund" },
-  { slug: "investments-long-term", category: "investments-wealth", name: "Long-Term Investing" },
+  { slug: "business-startup", category: "business-growth", name: "Startup Launch" },
+  { slug: "business-equipment", category: "business-growth", name: "Equipment & Tools" },
   { slug: "education-tuition", category: "education", name: "Education & Tuition" },
   { slug: "education-certification", category: "education", name: "Certification & Training" },
 ];
@@ -107,9 +118,26 @@ const FOUNDER_PLANS = [
   },
 ];
 
+// --sync-approved-copy: bring existing categories in line with the approved
+// list (rename legacy slugs, apply approved names, descriptions and order).
+// Without it, existing rows are never changed.
+const syncApprovedCopy = process.argv.includes("--sync-approved-copy");
+
 const upsertCategory = async (category, index) => {
-  const existing = await SuccessCenterCategory.findOne({ slug: category.slug });
-  if (existing) return { created: false, doc: existing };
+  const existing =
+    (await SuccessCenterCategory.findOne({ slug: category.slug })) ??
+    (category.legacySlug &&
+      (await SuccessCenterCategory.findOne({ slug: category.legacySlug })));
+  if (existing) {
+    if (syncApprovedCopy) {
+      existing.slug = category.slug;
+      existing.name = category.name;
+      existing.description = category.description;
+      existing.order = index + 1;
+      await existing.save();
+    }
+    return { created: false, doc: existing };
+  }
 
   const doc = await SuccessCenterCategory.create({
     name: category.name,
@@ -200,7 +228,7 @@ const seed = async () => {
   }
 
   console.log(
-    `Seed complete. Categories +${createdCategories}/${CATEGORIES.length}, programs +${createdPrograms}/${PROGRAMS.length}, founder plans +${createdPlans}/${FOUNDER_PLANS.length} (existing rows were left unchanged).`,
+    `Seed complete. Categories +${createdCategories}/${CATEGORIES.length}, programs +${createdPrograms}/${PROGRAMS.length}, founder plans +${createdPlans}/${FOUNDER_PLANS.length}. ${syncApprovedCopy ? "Existing categories were updated to the approved names and descriptions." : "Existing rows were left unchanged (pass --sync-approved-copy to apply the approved category copy)."}`,
   );
 
   await mongoose.disconnect();

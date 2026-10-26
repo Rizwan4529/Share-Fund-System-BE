@@ -1,7 +1,12 @@
-import { ENUMS, HTTP_STATUS } from "#/utils/constants.js";
+import {
+  DISCRETIONARY_RULE_PERCENTAGES,
+  ENUMS,
+  HTTP_STATUS,
+} from "#/utils/constants.js";
 import { AppError } from "#/utils/appError.js";
 import { writeAuditLog } from "#/features/audit-logs/audit-log.service.js";
 import SuccessProfile from "./success-profile.model.js";
+import { missingSections } from "./success-profile.completion.js";
 
 const NESTED_SECTIONS = ["financials", "discretionaryRule", "planningAnswers"];
 
@@ -31,13 +36,36 @@ const applyProfileUpdates = (profile, data) => {
     }
   }
 
-  // Editing a submitted profile invalidates the earlier accuracy confirmation.
+  if (data.discretionaryRule) normalizeDiscretionaryRule(profile);
+
+  // Editing a submitted profile invalidates the earlier confirmations.
   if (
     profile.isModified() &&
     profile.status === ENUMS.SUCCESS_PROFILE_STATUS.COMPLETE
   ) {
     profile.status = ENUMS.SUCCESS_PROFILE_STATUS.INCOMPLETE;
     profile.accuracyConfirmed = false;
+    profile.estimatesAcknowledged = false;
+  }
+};
+
+/**
+ * Keeps the rule's stored percentage in step with its label: a preset label
+ * sets its own percentage and drops any old custom value; "custom" copies the
+ * custom percentage. Prevents e.g. a 30% label stored with a 10% value.
+ */
+const normalizeDiscretionaryRule = (profile) => {
+  const label = profile.get("discretionaryRule.label");
+  if (!label) return;
+  const preset = DISCRETIONARY_RULE_PERCENTAGES[label];
+  if (preset != null) {
+    profile.set("discretionaryRule.selectedPercentage", preset);
+    profile.set("discretionaryRule.customPercentage", undefined);
+  } else {
+    profile.set(
+      "discretionaryRule.selectedPercentage",
+      profile.get("discretionaryRule.customPercentage"),
+    );
   }
 };
 
@@ -117,9 +145,18 @@ export const updateMySuccessProfile = async (data, user) => {
 
 export const completeMySuccessProfile = async (data, user) => {
   const profile = await findProfileByUserId(user._id);
-  const beforeValue = profile.toObject();
 
+  const missing = missingSections(profile);
+  if (missing.length)
+    throw new AppError(
+      `Finish these parts before completing your Success Profile: ${missing.join("; ")}.`,
+      HTTP_STATUS.BAD_REQUEST,
+      [{ code: ENUMS.SUCCESS_PROFILE_ERROR_CODE.PROFILE_INCOMPLETE, missing }],
+    );
+
+  const beforeValue = profile.toObject();
   profile.accuracyConfirmed = data.accuracyConfirmed;
+  profile.estimatesAcknowledged = data.estimatesAcknowledged;
   profile.status = ENUMS.SUCCESS_PROFILE_STATUS.COMPLETE;
   await profile.save();
 

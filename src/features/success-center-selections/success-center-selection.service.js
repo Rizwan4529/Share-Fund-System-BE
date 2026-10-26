@@ -91,26 +91,48 @@ const resolveSelectionAllowance = async (user) => {
   return allowance;
 };
 
-const assertCanSelectAnother = async (user) => {
-  const allowance = await resolveSelectionAllowance(user);
-  if (allowance === null) return;
+/**
+ * Whether the participant can select another program, for the selection
+ * check and for the UI (GET /me/status). `limit` is null for "no limit".
+ */
+export const getSelectionAllowance = async (user) => {
+  const [limit, used] = await Promise.all([
+    resolveSelectionAllowance(user),
+    SuccessCenterSelection.countDocuments({
+      userId: user._id,
+      status: ENUMS.SUCCESS_CENTER_SELECTION_STATUS.ACTIVE,
+    }),
+  ]);
+  const reason =
+    limit === 0
+      ? CODE.PLANNING_ACCESS_REQUIRED
+      : limit !== null && used >= limit
+        ? CODE.SELECTION_LIMIT_REACHED
+        : null;
+  return {
+    limit,
+    used,
+    remaining: limit === null ? null : Math.max(limit - used, 0),
+    canSelect: reason === null,
+    reason,
+  };
+};
 
-  if (allowance === 0)
+const assertCanSelectAnother = async (user) => {
+  const { limit, reason } = await getSelectionAllowance(user);
+
+  if (reason === CODE.PLANNING_ACCESS_REQUIRED)
     throw new AppError(
       "Choose a Funding Access plan to start selecting Success Center programs.",
       HTTP_STATUS.FORBIDDEN,
       [{ code: CODE.PLANNING_ACCESS_REQUIRED }],
     );
 
-  const active = await SuccessCenterSelection.countDocuments({
-    userId: user._id,
-    status: ENUMS.SUCCESS_CENTER_SELECTION_STATUS.ACTIVE,
-  });
-  if (active >= allowance)
+  if (reason === CODE.SELECTION_LIMIT_REACHED)
     throw new AppError(
-      `Your plan includes up to ${allowance} program${allowance === 1 ? "" : "s"}. Remove a program or choose a larger Funding Access plan to add another.`,
+      `Your plan includes up to ${limit} program${limit === 1 ? "" : "s"}. Remove a program or choose a larger Funding Access plan to add another.`,
       HTTP_STATUS.CONFLICT,
-      [{ code: CODE.SELECTION_LIMIT_REACHED, allowance }],
+      [{ code: CODE.SELECTION_LIMIT_REACHED, allowance: limit }],
     );
 };
 

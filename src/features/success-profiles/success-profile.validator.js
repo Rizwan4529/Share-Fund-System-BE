@@ -1,7 +1,8 @@
-import { ENUMS } from "#/utils/constants.js";
+import { DISCRETIONARY_RULE_PERCENTAGES, ENUMS } from "#/utils/constants.js";
 import { z } from "zod";
 
-const amount = z.number().nonnegative("Amount cannot be negative").optional();
+// null clears an answer (back to "not answered"); 0 is a real answer.
+const amount = z.number().nonnegative("Amount cannot be negative").nullable().optional();
 const percentage = z.number().min(0).max(100).optional();
 const answer = z.string().trim().max(2000).optional();
 
@@ -29,11 +30,34 @@ const financialsSchema = z.object({
   comfortableMonthlyAmount: amount,
 });
 
-const discretionaryRuleSchema = z.object({
-  selectedPercentage: percentage,
-  label: discretionaryLabelSchema.optional(),
-  customPercentage: percentage,
-});
+// A preset label fixes its percentage (the server fills it in); a percentage
+// sent alongside it must agree. "custom" uses customPercentage.
+const discretionaryRuleSchema = z
+  .object({
+    selectedPercentage: percentage,
+    label: discretionaryLabelSchema.optional(),
+    customPercentage: percentage,
+  })
+  .superRefine((rule, ctx) => {
+    const preset = DISCRETIONARY_RULE_PERCENTAGES[rule.label];
+    if (preset != null && rule.selectedPercentage != null && rule.selectedPercentage !== preset)
+      ctx.addIssue({
+        code: "custom",
+        path: ["selectedPercentage"],
+        message: `The ${preset}% rule can't have a ${rule.selectedPercentage}% value`,
+      });
+    if (
+      rule.label === ENUMS.DISCRETIONARY_RULE_LABEL.CUSTOM &&
+      rule.selectedPercentage != null &&
+      rule.customPercentage != null &&
+      rule.selectedPercentage !== rule.customPercentage
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["selectedPercentage"],
+        message: "For a custom rule, the selected percentage must match the custom percentage",
+      });
+  });
 
 const planningAnswersSchema = z.object({
   desiredResult: answer,
@@ -71,5 +95,8 @@ export const updateSuccessProfileSchema = z
 export const completeSuccessProfileSchema = z.object({
   accuracyConfirmed: z.literal(true, {
     error: "You must confirm your profile information is accurate",
+  }),
+  estimatesAcknowledged: z.literal(true, {
+    error: "You must acknowledge that recommendations and timelines are estimates",
   }),
 });

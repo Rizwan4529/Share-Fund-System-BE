@@ -30,8 +30,8 @@ export const PLANNING_ANSWER_FIELDS = [
   "goalPriorities",
 ];
 
-// Financial fields default to 0, so only a positive value counts as answered.
-const isFinancialFilled = (value) => typeof value === "number" && value > 0;
+// Any recorded amount counts, including a genuine $0 (no debt, no savings).
+const isFinancialFilled = (value) => typeof value === "number" && value >= 0;
 
 const isTextFilled = (value) =>
   typeof value === "string" && value.trim().length > 0;
@@ -46,6 +46,27 @@ const isDiscretionaryRuleFilled = (rule) => {
 
 const fractionFilled = (section, fields, isFilled) =>
   fields.filter((field) => isFilled(section?.[field])).length / fields.length;
+
+const countFilled = (section, fields, isFilled) =>
+  fields.filter((field) => isFilled(section?.[field])).length;
+
+/**
+ * The parts still unanswered, in questionnaire order, as participant-facing
+ * labels. Empty when the profile can be completed.
+ */
+export const missingSections = (profile) => {
+  const missing = [];
+  if (!profile.profileType) missing.push("who this plan is for");
+  const financials = countFilled(profile.financials, FINANCIAL_FIELDS, isFinancialFilled);
+  if (financials < FINANCIAL_FIELDS.length)
+    missing.push(`monthly finances (${financials} of ${FINANCIAL_FIELDS.length} answered)`);
+  if (!isDiscretionaryRuleFilled(profile.discretionaryRule))
+    missing.push("discretionary spending rule");
+  const answers = countFilled(profile.planningAnswers, PLANNING_ANSWER_FIELDS, isTextFilled);
+  if (answers < PLANNING_ANSWER_FIELDS.length)
+    missing.push(`planning questions (${answers} of ${PLANNING_ANSWER_FIELDS.length} answered)`);
+  return missing;
+};
 
 /** Returns an integer 0–100 for a SuccessProfile document or plain object. */
 export const calculateCompletionPercentage = (profile) => {

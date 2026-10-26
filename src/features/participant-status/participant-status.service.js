@@ -4,10 +4,11 @@ import { standingOf } from "#/features/admin-participants/admin-participant.serv
 import SuccessProfile from "#/features/success-profiles/success-profile.model.js";
 import SuccessCenterSelection from "#/features/success-center-selections/success-center-selection.model.js";
 import Payment from "#/features/payments/payment.model.js";
+import { getSelectionAllowance } from "#/features/success-center-selections/success-center-selection.service.js";
 
 /** One owner-only snapshot of the participant's standing and history. */
 export const getMyStatus = async (user) => {
-  const [profile, selections, [paymentSummary]] = await Promise.all([
+  const [profile, selections, [paymentSummary], selectionAllowance] = await Promise.all([
     SuccessProfile.findOne({ userId: user._id })
       .select("profileType status completionPercentage updatedAt")
       .lean(),
@@ -37,6 +38,7 @@ export const getMyStatus = async (user) => {
         },
       },
     ]),
+    getSelectionAllowance(user),
   ]);
 
   const counts = Object.fromEntries(
@@ -59,6 +61,8 @@ export const getMyStatus = async (user) => {
         foundingParticipant: user.foundingParticipant,
       },
       planningAccessStatus: user.planningAccessStatus,
+      // Whether another program can be selected now, and why not.
+      selectionAllowance,
       successProfile: profile
         ? {
             profileType: profile.profileType,
