@@ -17,6 +17,7 @@ export const HTTP_STATUS = {
   NOT_FOUND: 404,
   CONFLICT: 409,
   UNPROCESSABLE_ENTITY: 422,
+  TOO_MANY_REQUESTS: 429,
   INTERNAL_SERVER_ERROR: 500,
   BAD_GATEWAY: 502,
 };
@@ -69,7 +70,7 @@ export const EMAIL_TEMPLATES = {
     FILE: "verify-email",
     SUBJECT: "Verify your email address",
     PREHEADER: "One quick step before you dive in.",
-    TEXT: "Welcome to SFS, {{firstName}}.\n\nOne quick step before you dive in.\n\nWe've sent a verification link to {{email}}. Open the link below to confirm your address:\n\n{{verifyUrl}}\n\nIf you didn't create a Share Fund System account, you can ignore this email.",
+    TEXT: "Welcome to SFS, {{firstName}}.\n\nOne quick step before you dive in.\n\nWe've sent a verification link to {{email}}. Open the link below to confirm your address:\n\n{{verifyUrl}}\n\nThis link expires in {{expiresIn}} and can be used once. If it expires, request a new one from the verification page.\n\nIf you didn't create a Share Fund System account, you can ignore this email.",
   },
 };
 
@@ -408,6 +409,7 @@ export const ENUMS = {
     UPDATED_PARTICIPANT_ACCESS: "updated_participant_access",
     FAILED_PAYMENT: "failed_payment",
     EXPORTED_DATA: "exported_data",
+    CREATED_ADMIN: "created_admin",
   },
   AUDIT_LOG_TARGET_TYPE: {
     USER: "User",
@@ -625,6 +627,50 @@ export const ENUMS = {
     INCOME_REQUIRED: "INCOME_REQUIRED",
     GOAL_AMOUNT_REQUIRED: "GOAL_AMOUNT_REQUIRED",
   },
+  // A JWT's purpose — an email-verification link is never a session.
+  TOKEN_TYPE: {
+    ACCESS: "access",
+    EMAIL_VERIFICATION: "email_verification",
+  },
+  // Machine-readable auth errors (sent in `errors`) the frontend maps to UI.
+  AUTH_ERROR_CODE: {
+    EMAIL_TAKEN: "EMAIL_TAKEN",
+    PHONE_TAKEN: "PHONE_TAKEN",
+    ACCOUNT_SUSPENDED: "ACCOUNT_SUSPENDED",
+    ACCOUNT_CLOSED: "ACCOUNT_CLOSED",
+    SESSION_EXPIRED: "SESSION_EXPIRED",
+    VERIFICATION_LINK_EXPIRED: "VERIFICATION_LINK_EXPIRED",
+    VERIFICATION_LINK_INVALID: "VERIFICATION_LINK_INVALID",
+    TOO_MANY_REQUESTS: "TOO_MANY_REQUESTS",
+  },
+};
+
+/**
+ * Token lifetimes. Sessions default to JWT_EXPIRY_DATE (else DEFAULT);
+ * "Remember me" sessions use JWT_REMEMBER_EXPIRY_DATE (else REMEMBER_ME).
+ */
+export const AUTH_TOKEN_EXPIRY = {
+  DEFAULT: "7d",
+  REMEMBER_ME: "30d",
+  EMAIL_VERIFICATION: "24h",
+};
+// Shown in the verification email; keep in sync with EMAIL_VERIFICATION above.
+export const EMAIL_VERIFICATION_EXPIRY_LABEL = "24 hours";
+
+const MINUTE_MS = 60 * 1000; // unit conversion
+
+/** Abuse limits for public auth endpoints (per server instance). */
+export const AUTH_RATE_LIMITS = {
+  // Attempts per account email (from any IP) — slows password guessing on
+  // one account; generous enough that a real user is rarely affected.
+  LOGIN_PER_ACCOUNT: { windowMs: 15 * MINUTE_MS, max: 20 },
+  // Attempts per IP across all accounts.
+  LOGIN_PER_IP: { windowMs: 15 * MINUTE_MS, max: 50 },
+  REGISTER_PER_IP: { windowMs: 60 * MINUTE_MS, max: 10 },
+  // Verification emails per address — protects inboxes and the email quota.
+  RESEND_PER_EMAIL: { windowMs: 15 * MINUTE_MS, max: 3 },
+  RESEND_PER_IP: { windowMs: 15 * MINUTE_MS, max: 10 },
+  VERIFY_PER_IP: { windowMs: 15 * MINUTE_MS, max: 30 },
 };
 
 export const PARTICIPANT_STANDING_LABELS = {

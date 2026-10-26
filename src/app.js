@@ -28,6 +28,10 @@ import participantStatusRoutes from "#/features/participant-status/participant-s
 import { stripeWebhook } from "#/features/payments/payment.controller.js";
 const app = express();
 
+// Behind one proxy (Railway): req.ip is the real client IP, used by the auth
+// rate limits.
+app.set("trust proxy", 1);
+
 app.use(
   cors({
     origin: (origin, callback) => {

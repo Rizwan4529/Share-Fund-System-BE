@@ -1,7 +1,40 @@
-import jwt from "jsonwebtoken";
 import User from "#/features/users/user.model.js";
 import { AppError } from "#/utils/appError.js";
-import { HTTP_STATUS } from "#/utils/constants.js";
+import { ENUMS, HTTP_STATUS } from "#/utils/constants.js";
+import { verifyToken } from "#/utils/jwt.js";
+
+const CODE = ENUMS.AUTH_ERROR_CODE;
+
+/** Suspended/closed accounts are locked out everywhere, not just at login. */
+export const assertAccountUsable = (user) => {
+  if (user.status === ENUMS.AUTH_STATUS.SUSPENDED)
+    throw new AppError(
+      "This account has been suspended. Please contact support.",
+      HTTP_STATUS.FORBIDDEN,
+      [{ code: CODE.ACCOUNT_SUSPENDED }],
+    );
+  if (user.status === ENUMS.AUTH_STATUS.CLOSED)
+    throw new AppError(
+      "This account has been closed. Please contact support.",
+      HTTP_STATUS.FORBIDDEN,
+      [{ code: CODE.ACCOUNT_CLOSED }],
+    );
+};
+
+/**
+ * Resolves the user for an access token: right token type, user exists, and
+ * the token's version still matches (logout/suspension revoke older ones).
+ */
+const userFromAccessToken = async (token) => {
+  const decoded = verifyToken(token, ENUMS.TOKEN_TYPE.ACCESS);
+  const user = await User.findById(decoded.userId).select("+tokenVersion");
+  if (!user) throw new AppError("User not found", HTTP_STATUS.UNAUTHORIZED);
+  if ((decoded.tv ?? 0) !== (user.tokenVersion ?? 0))
+    throw new AppError("Your session has ended. Please log in again.", HTTP_STATUS.UNAUTHORIZED, [
+      { code: CODE.SESSION_EXPIRED },
+    ]);
+  return user;
+};
 
 export const authenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -21,15 +54,8 @@ export const authenticate = async (req, res, next) => {
       HTTP_STATUS.UNAUTHORIZED,
     );
 
-  const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-  const user = await User.findById(decoded.userId);
-
-  if (!user) throw new AppError("User not found", HTTP_STATUS.UNAUTHORIZED);
-  // TODO(account-status): admins can now set User.status to suspended/closed
-  // (PATCH /admin/participants/:userId/status) but it is not enforced yet.
-  // Enforcement belongs here (reject suspended/closed non-admin users) and
-  // in the login service.
+  const user = await userFromAccessToken(token);
+  assertAccountUsable(user);
   req.user = user;
   next();
 };
@@ -42,11 +68,11 @@ export const optionalAuthenticate = async (req, res, next) => {
   try {
     const token = authHeader.split(" ")[1];
     if (!token) return next();
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId);
-    if (user) req.user = user;
+    const user = await userFromAccessToken(token);
+    assertAccountUsable(user);
+    req.user = user;
   } catch {
-    // ignore invalid/expired tokens for optional auth
+    // ignore invalid/expired/revoked tokens for optional auth
   }
   next();
 };

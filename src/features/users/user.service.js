@@ -1,13 +1,21 @@
+import { randomUUID } from "node:crypto";
 import {
   EMAIL_TEMPLATES,
+  EMAIL_VERIFICATION_EXPIRY_LABEL,
   ENUMS,
   FRONTEND_ROUTES,
   HTTP_STATUS,
 } from "#/utils/constants.js";
 import { AppError } from "#/utils/appError.js";
-import { signUserToken, verifyUserToken } from "#/utils/jwt.js";
+import {
+  signAccessToken,
+  signEmailVerificationToken,
+  verifyToken,
+} from "#/utils/jwt.js";
+import { assertAccountUsable } from "#/middleware/auth.middleware.js";
 import { requirePublishedDocuments } from "#/features/legal-documents/legal-document.service.js";
 import { recordAcceptancesForUser } from "#/features/legal-acceptances/legal-acceptance.service.js";
+import { writeAuditLog } from "#/features/audit-logs/audit-log.service.js";
 import User from "./user.model.js";
 import { sendEmail } from "#/utils/email.js";
 import { interpolate, renderEmailTemplate } from "#/utils/emailTemplate.js";
@@ -17,6 +25,17 @@ const SIGNUP_LEGAL_DOCUMENT_TYPES = [
   ENUMS.LEGAL_DOCUMENT_TYPE.PRIVACY,
   ENUMS.LEGAL_DOCUMENT_TYPE.FOUNDING_DISCLOSURE,
 ];
+
+const CODE = ENUMS.AUTH_ERROR_CODE;
+
+// Fields that never leave the server, even on the user's own record.
+const PRIVATE_FIELDS = ["password", "emailVerificationNonce", "tokenVersion", "__v"];
+
+const toSafeUser = (user) => {
+  const safe = user.toObject();
+  for (const field of PRIVATE_FIELDS) delete safe[field];
+  return safe;
+};
 
 const buildVerificationUrl = (token) =>
   new URL(
@@ -29,6 +48,7 @@ const sendVerificationEmail = async (user, token) => {
     firstName: user.firstName || "there",
     email: user.email,
     verifyUrl,
+    expiresIn: EMAIL_VERIFICATION_EXPIRY_LABEL,
     preheader: EMAIL_TEMPLATES.VERIFY_EMAIL.PREHEADER,
   };
 
@@ -40,32 +60,62 @@ const sendVerificationEmail = async (user, token) => {
   });
 };
 
-export const loginUser = async (data) => {
-  const { email, password } = data;
-  const user = await User.findOne({ email });
-
-  if (!user) {
-    throw new AppError("Invalid email or password", HTTP_STATUS.UNAUTHORIZED);
+/**
+ * Issues a fresh single-use verification link: a new nonce replaces any
+ * previous one, so links from earlier emails stop working.
+ */
+const issueVerificationEmail = async (user, context) => {
+  const nonce = randomUUID();
+  await User.updateOne({ _id: user._id }, { $set: { emailVerificationNonce: nonce } });
+  try {
+    await sendVerificationEmail(user, signEmailVerificationToken(user._id, nonce));
+  } catch (error) {
+    console.error(`Verification email failed (${context}):`, error);
   }
+};
 
-  const isPasswordCorrect = await user.comparePassword(password);
-  if (!isPasswordCorrect) {
+export const loginUser = async ({ email, password, remember }) => {
+  const user = await User.findOne({ email }).select("+tokenVersion");
+
+  // One generic message for unknown email and wrong password (no enumeration).
+  if (!user || !(await user.comparePassword(password)))
     throw new AppError("Invalid email or password", HTTP_STATUS.UNAUTHORIZED);
-  }
 
-  const token = signUserToken(user._id);
+  // Only after the password is proven: suspended/closed accounts can't sign in.
+  assertAccountUsable(user);
 
-  const userSafe = user.toObject();
-  delete userSafe.password;
-
+  const token = signAccessToken(user, { remember: Boolean(remember) });
   return {
     success: true,
     message: "Login Successful",
-    data: { ...userSafe, token },
+    data: { ...toSafeUser(user), token },
   };
 };
 
+/** Logout revokes every session for this user (tokenVersion bump). */
+export const logoutUser = async (user) => {
+  await User.updateOne({ _id: user._id }, { $inc: { tokenVersion: 1 } });
+  return { success: true, message: "Logged out" };
+};
+
+/** Explicit duplicate checks so the client can point at the right field. */
+const assertAvailable = async ({ email, phone }) => {
+  const [emailTaken, phoneTaken] = await Promise.all([
+    User.exists({ email }),
+    User.exists({ phone }),
+  ]);
+  if (emailTaken)
+    throw new AppError("An account with this email already exists.", HTTP_STATUS.CONFLICT, [
+      { code: CODE.EMAIL_TAKEN, field: "email" },
+    ]);
+  if (phoneTaken)
+    throw new AppError("An account with this phone number already exists.", HTTP_STATUS.CONFLICT, [
+      { code: CODE.PHONE_TAKEN, field: "phone" },
+    ]);
+};
+
 const createRegisteredUser = async (data, role) => {
+  await assertAvailable(data);
   const user = new User({
     firstName: data.firstName,
     lastName: data.lastName,
@@ -79,23 +129,15 @@ const createRegisteredUser = async (data, role) => {
     role,
   });
   await user.save();
-
-  const token = signUserToken(user._id, "1h");
-  try {
-    await sendVerificationEmail(user, token);
-  } catch (error) {
-    console.error("Verification email failed after registration:", error);
-  }
-  const safeUser = user.toObject();
-  delete safeUser?.password;
-  return safeUser;
+  await issueVerificationEmail(user, "registration");
+  return user;
 };
 
 export const registerUser = async (data) => {
   const documents = await requirePublishedDocuments(SIGNUP_LEGAL_DOCUMENT_TYPES);
-  const safeUser = await createRegisteredUser(data, ENUMS.ROLES.USER);
+  const user = await createRegisteredUser(data, ENUMS.ROLES.USER);
   await recordAcceptancesForUser(
-    safeUser._id,
+    user._id,
     documents,
     ENUMS.LEGAL_ACCEPTANCE_CONTEXT.SIGNUP,
   );
@@ -104,58 +146,95 @@ export const registerUser = async (data) => {
     success: true,
     message:
       "Registration successful! Please check your email to verify your account.",
-    data: safeUser,
+    data: toSafeUser(user),
   };
 };
 
-export const registerAdmin = async (data) => {
-  const safeUser = await createRegisteredUser(data, ENUMS.ROLES.ADMIN);
+/** Admin-only (see user.routes.js): an existing admin creates another admin. */
+export const registerAdmin = async (data, createdBy) => {
+  const user = await createRegisteredUser(data, ENUMS.ROLES.ADMIN);
+  await writeAuditLog({
+    actorId: createdBy._id,
+    action: ENUMS.AUDIT_LOG_ACTION.CREATED_ADMIN,
+    targetType: ENUMS.AUDIT_LOG_TARGET_TYPE.USER,
+    targetId: user._id,
+    afterValue: { email: user.email, role: user.role },
+  });
 
   return {
     success: true,
     message:
       "Admin registration successful! Please check your email to verify your account.",
-    data: safeUser,
+    data: toSafeUser(user),
   };
 };
 
-export const verifyEmail = async (data) => {
-  const { token } = data;
+const invalidLink = (message) =>
+  new AppError(message, HTTP_STATUS.BAD_REQUEST, [
+    { code: CODE.VERIFICATION_LINK_INVALID },
+  ]);
 
-  const decoded = verifyUserToken(token);
-  const user = await User.findByIdAndUpdate(
-    decoded.userId,
+export const verifyEmail = async ({ token }) => {
+  let decoded;
+  try {
+    decoded = verifyToken(token, ENUMS.TOKEN_TYPE.EMAIL_VERIFICATION);
+  } catch (error) {
+    if (error.name === "TokenExpiredError")
+      throw new AppError(
+        "This verification link has expired. Request a new one below.",
+        HTTP_STATUS.BAD_REQUEST,
+        [{ code: CODE.VERIFICATION_LINK_EXPIRED }],
+      );
+    throw invalidLink("This verification link isn't valid. Request a new one below.");
+  }
+
+  const user = await User.findById(decoded.userId).select("+emailVerificationNonce");
+  if (!user) throw invalidLink("This verification link isn't valid. Request a new one below.");
+
+  if (user.emailVerified)
+    return {
+      success: true,
+      message: "Your email is already verified. You can log in.",
+      data: { alreadyVerified: true },
+    };
+
+  if (!decoded.nonce || decoded.nonce !== user.emailVerificationNonce)
+    throw invalidLink(
+      "This verification link is no longer valid — a newer one was sent. Use the latest email or request a new link below.",
+    );
+
+  await User.updateOne(
+    { _id: user._id },
     {
-      $set: { emailVerified: true, status: ENUMS.AUTH_STATUS.ACTIVE },
+      $set: {
+        emailVerified: true,
+        // Verifying never re-activates a suspended or closed account.
+        ...(user.status === ENUMS.AUTH_STATUS.PENDING_VERIFICATION && {
+          status: ENUMS.AUTH_STATUS.ACTIVE,
+        }),
+      },
+      $unset: { emailVerificationNonce: 1 },
     },
-    { new: true }, //tells mongodb to send the new updated document
   );
 
-  if (!user)
-    throw new AppError("Invalid or expired token", HTTP_STATUS.UNAUTHORIZED);
-
-  const safeUser = user.toObject();
-  delete safeUser.password;
   return {
     success: true,
     message: "Email verified successfully",
-    // data: safeUser,
+    data: { alreadyVerified: false },
   };
 };
 
-export const resendVerificationLink = async (data) => {
-  const { email } = data;
+/**
+ * Always the same response, whether or not the email is registered, so this
+ * endpoint can't be used to discover accounts. Only unverified accounts get
+ * an email.
+ */
+export const resendVerificationLink = async ({ email }) => {
   const user = await User.findOne({ email });
-  if (!user) throw new AppError("User does not exist", HTTP_STATUS.NOT_FOUND);
-  const token = signUserToken(user._id);
-  try {
-    await sendVerificationEmail(user, token);
-  } catch (error) {
-    console.error("Verification email failed on resend:", error);
-  }
+  if (user && !user.emailVerified) await issueVerificationEmail(user, "resend");
   return {
     success: true,
     message:
-      "Verification link resent! please check your email to verify your account",
+      "If that email belongs to an account that still needs verifying, we've sent a new link.",
   };
 };

@@ -185,6 +185,19 @@ const userSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    // Must match the `nonce` in a verification link; replaced on every resend
+    // and cleared on success, so each link works once and older links die.
+    emailVerificationNonce: {
+      type: String,
+      select: false,
+    },
+    // Copied into every access token as `tv`; incrementing it (logout,
+    // suspension) revokes all of the user's existing sessions.
+    tokenVersion: {
+      type: Number,
+      default: 0,
+      select: false,
+    },
     planningAccessStatus: {
       // Turned on only by a webhook-confirmed Funding Access payment.
       type: String,
