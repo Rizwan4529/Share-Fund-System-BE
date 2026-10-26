@@ -32,7 +32,9 @@ const userSchema = new Schema(
       type: String,
       required: [true, "Password is required"],
       minLength: [8, "Password must be at least 8 characters long"],
-      // select: false,
+      // Never returned unless asked for (.select("+password")), so no query
+      // can leak the hash by accident.
+      select: false,
       validate: {
         validator: (value) =>
           /[A-Z]/.test(value) &&

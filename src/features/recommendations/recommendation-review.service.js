@@ -9,6 +9,7 @@ import Recommendation from "./recommendation.model.js";
 import {
   AFFORDABILITY_FIELD,
   buildEffective,
+  finalPaymentOf,
   hasField,
   optionPath,
   sameValue,
@@ -338,6 +339,24 @@ const assertConsistent = (effective) => {
   };
   for (const option of effective.options) check(option, `${option.label} plan`);
   check(effective.oneTimeOption, "One-time option");
+
+  // An adjusted monthly schedule must add up to the activation amount: the
+  // payments cover it, and the last one isn't needed beyond it. (Only options
+  // the admin changed — older stored plans may predate this rule.)
+  const SCHEDULE_FIELDS = ["scheduledPayment", "months", "totalActivationRequirement"];
+  for (const option of effective.options) {
+    if (!option.adjustedFields?.some((field) => SCHEDULE_FIELDS.includes(field))) continue;
+    const { scheduledPayment: payment, months, totalActivationRequirement: total } = option;
+    if (payment == null || months == null || total == null) continue;
+    if (payment * months < total)
+      throw badRequest(
+        `${option.label} plan: ${months} payments of ${payment} add up to ${payment * months}, less than the activation amount of ${total}. Raise the payment or the months.`,
+      );
+    if (finalPaymentOf(option) <= 0)
+      throw badRequest(
+        `${option.label} plan: ${months - 1} payments of ${payment} already cover the activation amount of ${total}. Lower the months to ${Math.ceil(total / payment)}.`,
+      );
+  }
 };
 
 export const adjustRecommendation = async (id, body, admin) => {

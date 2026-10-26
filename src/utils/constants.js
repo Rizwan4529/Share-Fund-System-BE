@@ -409,6 +409,9 @@ export const ENUMS = {
     UPDATED_PARTICIPANT_STATUS: "updated_participant_status",
     UPDATED_PARTICIPANT_ACCESS: "updated_participant_access",
     FAILED_PAYMENT: "failed_payment",
+    // A card was declined; the checkout stays open for another try.
+    FAILED_PAYMENT_ATTEMPT: "failed_payment_attempt",
+    RESENT_PAYMENT_RECEIPT: "resent_payment_receipt",
     EXPORTED_DATA: "exported_data",
     CREATED_ADMIN: "created_admin",
   },
@@ -632,6 +635,13 @@ export const ENUMS = {
     PROFILE_REQUIRED: "PROFILE_REQUIRED",
     INCOME_REQUIRED: "INCOME_REQUIRED",
     GOAL_AMOUNT_REQUIRED: "GOAL_AMOUNT_REQUIRED",
+    PROFILE_INCOMPLETE: "PROFILE_INCOMPLETE",
+    // The program's activation rules are missing or invalid (admin must fix).
+    RULES_INVALID: "RULES_INVALID",
+    // An admin has adjusted this plan; only an admin can reset it.
+    PLAN_LOCKED: "PLAN_LOCKED",
+    OPTION_NOT_AVAILABLE: "OPTION_NOT_AVAILABLE",
+    ACTIVATION_ALREADY_PAID: "ACTIVATION_ALREADY_PAID",
   },
   // A JWT's purpose — an email-verification link is never a session.
   TOKEN_TYPE: {
@@ -691,9 +701,16 @@ export const PARTICIPANT_STANDING_LABELS = {
   [ENUMS.PARTICIPANT_STANDING.PREMIUM_1000]: "Founder · Premium",
 };
 
-// TODO: no stored source for the allowance of participants without a founder
-// plan yet; move this into the settings engine once Todd confirms the number.
-export const DEFAULT_SUCCESS_CENTER_LIMIT = 1;
+/** Display names for founder plans (FounderPlan.name is an internal key). */
+export const FOUNDER_PLAN_DISPLAY_NAMES = {
+  [ENUMS.FOUNDER_PLAN_NAME.ESSENTIAL_100]: "Essential",
+  [ENUMS.FOUNDER_PLAN_NAME.EXPANDED_500]: "Expanded",
+  [ENUMS.FOUNDER_PLAN_NAME.PREMIUM_1000]: "Premium",
+};
+
+// Stripe Checkout lifetime; Stripe allows 30 minutes to 24 hours. Abandoned
+// or declined checkouts settle (expired webhook) after this long.
+export const CHECKOUT_SESSION_TTL_MINUTES = 60;
 
 export const PAGINATION = {
   DEFAULT_PAGE: 1,

@@ -1,4 +1,4 @@
-import { ENUMS, HTTP_STATUS } from "#/utils/constants.js";
+import { ENUMS, FOUNDER_PLAN_DISPLAY_NAMES, HTTP_STATUS } from "#/utils/constants.js";
 import { AppError } from "#/utils/appError.js";
 import { toChargeableAmount } from "#/config/stripe.js";
 import User from "#/features/users/user.model.js";
@@ -142,7 +142,30 @@ const enrollmentsPipeline = ({ search, type, status, from, to, sortBy, sortOrder
   const direction = sortOrder === ENUMS.SORT_ORDER.ASC ? 1 : -1;
   return [
     PURCHASE_SHAPE,
-    { $unionWith: { coll: SuccessCenterSelection.collection.name, pipeline: [SELECTION_SHAPE] } },
+    {
+      $unionWith: {
+        coll: SuccessCenterSelection.collection.name,
+        pipeline: [
+          // Planning-only programs never need an activation, so they aren't
+          // enrollments (they'd sit as "pending" forever).
+          {
+            $lookup: {
+              from: SuccessCenterProgram.collection.name,
+              localField: "programId",
+              foreignField: "_id",
+              pipeline: [{ $project: { programType: 1 } }],
+              as: "programInfo",
+            },
+          },
+          {
+            $match: {
+              "programInfo.programType": { $ne: ENUMS.SUCCESS_CENTER_PROGRAM_TYPE.PLANNING },
+            },
+          },
+          SELECTION_SHAPE,
+        ],
+      },
+    },
     {
       $match: {
         ...(type && { type }),
@@ -226,7 +249,7 @@ const withEnrollmentLabels = async (rows) => {
         row.type === PURPOSE.FUNDING_ACCESS
           ? (fundingLabels.get(fundingAccessPlanKey) ?? fundingAccessPlanKey)
           : row.type === PURPOSE.FOUNDER_TIER
-            ? founderPlanName
+            ? (FOUNDER_PLAN_DISPLAY_NAMES[founderPlanName] ?? founderPlanName)
             : programName,
       itemDetail: row.type === PURPOSE.PROGRAM_ACTIVATION ? categoryName : null,
       paymentStatus: row.payment?.status ?? null,
@@ -301,6 +324,7 @@ const PAYMENT_ROW_STAGES = [
       refundStatus: 1,
       disputeStatus: 1,
       failureReason: 1,
+      lastAttemptFailureReason: 1,
     },
   },
 ];

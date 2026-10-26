@@ -18,7 +18,11 @@ import { recordAcceptancesForUser } from "#/features/legal-acceptances/legal-acc
 import { writeAuditLog } from "#/features/audit-logs/audit-log.service.js";
 import User from "./user.model.js";
 import { sendEmail } from "#/utils/email.js";
-import { interpolate, renderEmailTemplate } from "#/utils/emailTemplate.js";
+import {
+  getFrontendBaseUrl,
+  interpolate,
+  renderEmailTemplate,
+} from "#/utils/emailTemplate.js";
 
 const SIGNUP_LEGAL_DOCUMENT_TYPES = [
   ENUMS.LEGAL_DOCUMENT_TYPE.TERMS,
@@ -37,10 +41,10 @@ const toSafeUser = (user) => {
   return safe;
 };
 
+// getFrontendBaseUrl() adds the trailing slash, so FRONTEND_BASE_URL works
+// with or without one (like the payment return URLs).
 const buildVerificationUrl = (token) =>
-  new URL(
-    `${process.env.FRONTEND_BASE_URL}${FRONTEND_ROUTES.VERIFY_EMAIL}${token}/`,
-  ).toString();
+  new URL(`${getFrontendBaseUrl()}${FRONTEND_ROUTES.VERIFY_EMAIL}${token}/`).toString();
 
 const sendVerificationEmail = async (user, token) => {
   const verifyUrl = buildVerificationUrl(token);
@@ -75,7 +79,7 @@ const issueVerificationEmail = async (user, context) => {
 };
 
 export const loginUser = async ({ email, password, remember }) => {
-  const user = await User.findOne({ email }).select("+tokenVersion");
+  const user = await User.findOne({ email }).select("+password +tokenVersion");
 
   // One generic message for unknown email and wrong password (no enumeration).
   if (!user || !(await user.comparePassword(password)))

@@ -24,6 +24,24 @@ const assertCategoryExists = async (categoryId) => {
   return category;
 };
 
+/** Min/max pairs in the (merged) activation rules must stay in order. */
+const assertRulePairsInOrder = (rules = {}) => {
+  const pairs = [
+    ["activationPercentageMin", "activationPercentageMax", "Min activation %", "max activation %"],
+    ["minGoalAmount", "maxGoalAmount", "Minimum goal", "maximum goal"],
+  ];
+  for (const [minField, maxField, minLabel, maxLabel] of pairs) {
+    const min = rules[minField];
+    const max = rules[maxField];
+    if (min != null && max != null && min > max) {
+      const message = `${minLabel} (${min}) can't be above the ${maxLabel} (${max}).`;
+      throw new AppError(message, HTTP_STATUS.BAD_REQUEST, [
+        { field: `activationRules.${minField}`, message },
+      ]);
+    }
+  }
+};
+
 const nextOrder = async () => {
   const last = await SuccessCenterProgram.findOne()
     .sort({ order: -1 })
@@ -70,6 +88,7 @@ export const getSuccessCenterProgramById = async (id) => {
 
 export const createSuccessCenterProgram = async (data, user) => {
   await assertCategoryExists(data.categoryId);
+  assertRulePairsInOrder(data.activationRules);
 
   const program = new SuccessCenterProgram({
     ...data,
@@ -104,6 +123,7 @@ export const updateSuccessCenterProgram = async (id, data, user) => {
         {}),
       ...data.activationRules,
     };
+    assertRulePairsInOrder(program.activationRules);
     const { activationRules: _ignored, ...rest } = data;
     Object.assign(program, rest);
   } else {

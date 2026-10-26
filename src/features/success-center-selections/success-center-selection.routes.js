@@ -12,11 +12,13 @@ import {
   createSelectionSchema,
   listMySelectionsQuerySchema,
   selectionIdParamSchema,
+  updateSelectionGoalSchema,
 } from "./success-center-selection.validator.js";
 import {
   createSelection,
   listMySelections,
   removeSelection,
+  updateSelectionGoal,
 } from "./success-center-selection.controller.js";
 
 const router = express.Router();
@@ -31,6 +33,13 @@ router.patch(
   requireVerifiedEmail,
   validateParams(selectionIdParamSchema),
   removeSelection,
+);
+router.patch(
+  "/:id/goal",
+  requireVerifiedEmail,
+  validateParams(selectionIdParamSchema),
+  validate(updateSelectionGoalSchema),
+  updateSelectionGoal,
 );
 
 export default router;

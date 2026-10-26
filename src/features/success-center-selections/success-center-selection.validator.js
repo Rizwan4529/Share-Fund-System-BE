@@ -50,6 +50,32 @@ export const createSelectionSchema = z
     }
   });
 
+// Add or change the goal on an unpaid selection ("you can add or change this later").
+export const updateSelectionGoalSchema = z
+  .object({
+    goalAmount: z.number({ error: "Goal amount must be a number" }).positive("Goal amount must be more than 0"),
+    pricingSource: oneOf(
+      Object.values(ENUMS.SUCCESS_CENTER_PRICING_SOURCE),
+      "Invalid pricing source",
+    ).optional(),
+    verifiedQuoteAmount: z.number().positive("Verified quote amount must be more than 0").optional(),
+  })
+  .superRefine((data, ctx) => {
+    const verified = data.pricingSource === ENUMS.SUCCESS_CENTER_PRICING_SOURCE.VERIFIED;
+    if (verified && data.verifiedQuoteAmount == null)
+      ctx.addIssue({
+        code: "custom",
+        path: ["verifiedQuoteAmount"],
+        message: "Verified quote amount is required when pricing is verified",
+      });
+    if (!verified && data.verifiedQuoteAmount != null)
+      ctx.addIssue({
+        code: "custom",
+        path: ["verifiedQuoteAmount"],
+        message: "Verified quote amount is only allowed when pricing is verified",
+      });
+  });
+
 export const listMySelectionsQuerySchema = z.object({
   status: oneOf(
     Object.values(ENUMS.SUCCESS_CENTER_SELECTION_STATUS),

@@ -16,6 +16,7 @@ import {
   listRecommendationsQuerySchema,
   recommendationIdParamSchema,
   resetRecommendationSchema,
+  selectOptionSchema,
   selectionIdParamSchema,
 } from "./recommendation.validator.js";
 import {
@@ -26,6 +27,7 @@ import {
   getRecommendationForReview,
   listRecommendationsForReview,
   resetRecommendation,
+  selectActivationOption,
 } from "./recommendation.controller.js";
 
 // Participant: /api/v1/activation — acts only on the user's own selections.
@@ -42,6 +44,13 @@ router.get(
   "/selection/:selectionId",
   validateParams(selectionIdParamSchema),
   getActivationForSelection,
+);
+router.patch(
+  "/selection/:selectionId/option",
+  requireVerifiedEmail,
+  validateParams(selectionIdParamSchema),
+  validate(selectOptionSchema),
+  selectActivationOption,
 );
 
 // Admin review: /api/v1/admin/recommendations — every write is audit-logged.

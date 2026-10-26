@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { ENUMS, HTTP_STATUS, SETTING_KEYS } from "#/utils/constants.js";
+import { ENUMS, FOUNDER_PLAN_DISPLAY_NAMES, HTTP_STATUS, SETTING_KEYS } from "#/utils/constants.js";
 import { AppError } from "#/utils/appError.js";
 import { toChargeableAmount } from "#/config/stripe.js";
 import { getSettingsByKeys } from "#/features/settings/setting.service.js";
@@ -88,7 +88,7 @@ const resolveFundingAccess = async (referenceId, user) => {
   return {
     amount: plan.price,
     currency: requireCurrency(currency),
-    description: `Funding Access — ${plan.label ?? plan.key}`,
+    description: `Funding Access: ${plan.label ?? plan.key}`,
   };
 };
 
@@ -108,7 +108,7 @@ const resolveFounderTier = async (referenceId, user) => {
   return {
     amount: plan.price,
     currency: requireCurrency(currency),
-    description: `Founder Activation — ${plan.name}`,
+    description: `Founder Activation: ${FOUNDER_PLAN_DISPLAY_NAMES[plan.name] ?? plan.name}`,
   };
 };
 
@@ -146,9 +146,16 @@ const resolveProgramActivation = async (referenceId, user) => {
       CODE.NOT_ELIGIBLE,
     );
 
-  // Full one-time activation only for now.
+  // Full one-time activation only for now, so it must be within the
+  // participant's current savings (never above savings or safe capacity).
   // TODO(installments): charge a chosen paced option's scheduledPayment and
   // schedule the remaining installments.
+  if (plan.oneTimeOption?.affordable === false)
+    throw paymentError(
+      "The full one-time activation is more than your current savings. Monthly installment payments are coming soon — see your plan for the options that fit.",
+      HTTP_STATUS.UNPROCESSABLE_ENTITY,
+      CODE.NOT_ELIGIBLE,
+    );
   const amount = plan.oneTimeOption?.totalActivationRequirement;
   if (!isPositive(amount))
     throw unresolved("Your activation plan has no amount to pay — recalculate it first.");
@@ -157,7 +164,7 @@ const resolveProgramActivation = async (referenceId, user) => {
   return {
     amount,
     currency: requireCurrency(currency),
-    description: `Program activation — ${program?.name ?? "Success Center program"}`,
+    description: `Program activation: ${program?.name ?? "Success Center program"}`,
   };
 };
 

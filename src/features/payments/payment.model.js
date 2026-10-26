@@ -47,6 +47,15 @@ const paymentSchema = new Schema(
       type: String,
       trim: true,
     },
+    // Latest declined card attempt while the checkout is still open (the
+    // payment stays pending — the participant can try another card).
+    lastAttemptFailureReason: {
+      type: String,
+      trim: true,
+    },
+    lastAttemptFailedAt: {
+      type: Date,
+    },
     amount: {
       type: Number,
       required: [true, "Amount is required"],
@@ -108,6 +117,10 @@ const paymentSchema = new Schema(
     receiptRef: {
       type: String,
       trim: true,
+    },
+    // Last time a receipt email was attempted (throttles automatic retries).
+    receiptAttemptedAt: {
+      type: Date,
     },
   },
   { timestamps: true },

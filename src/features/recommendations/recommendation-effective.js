@@ -1,4 +1,5 @@
 import { ENUMS, RECOMMENDATION_ONE_TIME_KEY } from "#/utils/constants.js";
+import { isOneTimeAffordable } from "./activation-calculation.js";
 
 /*
  * "Effective" recommendation = the computed result with admin overrides
@@ -113,16 +114,38 @@ export const buildEffective = (rec, overrides = toPlain(rec)?.adminOverrides) =>
     }
   }
 
+  // Figures derived from overridden ones follow them.
+  const SCHEDULE_FIELDS = ["scheduledPayment", "months", "totalActivationRequirement"];
+  for (const option of effective.options) {
+    if (!option.adjustedFields?.some((field) => SCHEDULE_FIELDS.includes(field))) continue;
+    option.finalPayment = finalPaymentOf(option);
+    if (plain.inputSnapshot?.safeCapacity != null)
+      option.affordable = option.scheduledPayment <= plain.inputSnapshot.safeCapacity;
+  }
+  if (effective.oneTimeOption?.totalActivationRequirement != null)
+    effective.oneTimeOption.affordable = isOneTimeAffordable(
+      plain.inputSnapshot,
+      effective.oneTimeOption.totalActivationRequirement,
+    );
+
   return effective;
 };
 
-// Admin-only fields participants never see.
+/** Last payment once the regular ones are made (cents). */
+export const finalPaymentOf = ({ totalActivationRequirement, scheduledPayment, months }) =>
+  Math.round((totalActivationRequirement - scheduledPayment * (months - 1)) * 100) / 100;
+
+// Admin-only fields participants never see (incl. whether an admin changed
+// anything, the review state and the rule/setting internals).
 const ADMIN_ONLY_FIELDS = [
   "adminOverrides",
   "adminAdjustments",
   "adjustmentReason",
   "approvedBy",
   "approvedAt",
+  "adminAdjusted",
+  "reviewStatus",
+  "rulesVersionUsed",
 ];
 
 // Which fields an admin changed — participants just see the effective plan.
@@ -142,6 +165,5 @@ export const toParticipantView = (rec) => {
     oneTimeOption: withoutAdjustedFields(effective.oneTimeOption),
   };
   for (const field of ADMIN_ONLY_FIELDS) delete view[field];
-  view.reviewStatus ??= ENUMS.RECOMMENDATION_REVIEW_STATUS.PENDING_REVIEW;
   return view;
 };

@@ -1,20 +1,32 @@
 import { ENUMS, OBJECT_ID } from "#/utils/constants.js";
 import { z } from "zod";
 
-const nullableNumber = z.number().nullable().optional();
+// Every rule may be null (= use the settings value). Limits match the global
+// settings validation (setting-rules.js); min/max pairs are checked against
+// the merged rules in the service, since a PATCH may send only one side.
+const optional = (schema) => schema.nullable().optional();
+const number = (label) => z.number({ error: `${label} must be a number` });
+const percent = (label) =>
+  number(label).min(0, `${label} can't be negative`).max(100, `${label} can't be more than 100%`);
+const dayCount = (label) =>
+  number(label).int(`${label} must be a whole number of days`).min(0, `${label} can't be negative`);
 
 const activationRulesSchema = z
   .object({
-    activationPercentageMin: nullableNumber,
-    activationPercentageMax: nullableNumber,
-    defaultActivationPercentage: nullableNumber,
-    growthPeriodDays: nullableNumber,
-    eligibilityOffsetDays: nullableNumber,
-    fundingStartOffsetDays: nullableNumber,
-    fundingRangeDays: nullableNumber,
-    roundingIncrement: nullableNumber,
-    minGoalAmount: nullableNumber,
-    maxGoalAmount: nullableNumber,
+    activationPercentageMin: optional(percent("Min activation %")),
+    activationPercentageMax: optional(
+      percent("Max activation %").refine((value) => value > 0, "Max activation % must be more than 0%"),
+    ),
+    defaultActivationPercentage: optional(
+      percent("Default activation %").refine((value) => value > 0, "Default activation % must be more than 0%"),
+    ),
+    growthPeriodDays: optional(dayCount("Growth period")),
+    eligibilityOffsetDays: optional(dayCount("Eligibility offset")),
+    fundingStartOffsetDays: optional(dayCount("Funding estimate start")),
+    fundingRangeDays: optional(dayCount("Funding range width")),
+    roundingIncrement: optional(number("Rounding increment").positive("Rounding increment must be more than 0")),
+    minGoalAmount: optional(number("Minimum goal").min(0, "Minimum goal can't be negative")),
+    maxGoalAmount: optional(number("Maximum goal").positive("Maximum goal must be more than 0")),
   })
   .optional();
 

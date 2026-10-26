@@ -9,6 +9,7 @@ import SuccessCenterProgram from "#/features/success-center-programs/success-cen
 import SuccessCenterSelection from "./success-center-selection.model.js";
 import FounderPurchase from "#/features/founder-purchases/founder-purchase.model.js";
 import FounderPlan from "#/features/founder-plans/founder-plan.model.js";
+import Recommendation from "#/features/recommendations/recommendation.model.js";
 
 const DUPLICATE_MESSAGE = "You have already selected this program";
 
@@ -56,40 +57,67 @@ const CODE = ENUMS.SELECTION_ERROR_CODE;
  * admin granted planning access without a purchase, or an older purchase
  * whose allowance wasn't recorded) and 0 when the participant has no access.
  */
-const resolveSelectionAllowance = async (user) => {
+/**
+ * The same rule for many participants at once (admin lists and exports), so
+ * every view shows exactly what the selection check enforces.
+ * @param {{ _id, planningAccessStatus }[]} users
+ * @returns {Promise<Map<string, number|null>>} userId → allowance
+ */
+export const resolveSelectionAllowances = async (users) => {
   const purchases = await FounderPurchase.find({
-    userId: user._id,
+    userId: { $in: users.map((user) => user._id) },
     activationStatus: ENUMS.FOUNDER_PURCHASE_ACTIVATION_STATUS.COMPLETED,
   })
-    .select("purpose planId programAllowance")
+    .select("userId purpose planId programAllowance")
     .lean();
 
-  if (!purchases.length)
-    return user.planningAccessStatus === ENUMS.PLANNING_ACCESS_STATUS.ACTIVE ? null : 0;
+  const founderPlanIds = purchases
+    .filter((purchase) => purchase.purpose === ENUMS.PAYMENT_PURPOSE.FOUNDER_TIER)
+    .map((purchase) => purchase.planId);
+  const includedByPlan = new Map(
+    (founderPlanIds.length
+      ? await FounderPlan.find({ _id: { $in: founderPlanIds } })
+          .select("includedSuccessCenters")
+          .lean()
+      : []
+    ).map((plan) => [String(plan._id), plan.includedSuccessCenters?.length ?? 0]),
+  );
 
-  let allowance = 0;
-  const founderPlanIds = [];
+  const byUser = new Map();
   for (const purchase of purchases) {
-    if (purchase.purpose === ENUMS.PAYMENT_PURPOSE.FOUNDER_TIER) {
-      founderPlanIds.push(purchase.planId);
-    } else if (typeof purchase.programAllowance === "number") {
-      allowance += purchase.programAllowance;
-    } else {
-      return null;
-    }
+    const key = String(purchase.userId);
+    if (!byUser.has(key)) byUser.set(key, []);
+    byUser.get(key).push(purchase);
   }
 
-  if (founderPlanIds.length) {
-    const plans = await FounderPlan.find({ _id: { $in: founderPlanIds } })
-      .select("includedSuccessCenters")
-      .lean();
-    allowance += plans.reduce(
-      (sum, plan) => sum + (plan.includedSuccessCenters?.length ?? 0),
-      0,
-    );
+  const allowances = new Map();
+  for (const user of users) {
+    const own = byUser.get(String(user._id)) ?? [];
+    if (!own.length) {
+      allowances.set(
+        String(user._id),
+        user.planningAccessStatus === ENUMS.PLANNING_ACCESS_STATUS.ACTIVE ? null : 0,
+      );
+      continue;
+    }
+    let allowance = 0;
+    for (const purchase of own) {
+      if (purchase.purpose === ENUMS.PAYMENT_PURPOSE.FOUNDER_TIER) {
+        allowance += includedByPlan.get(String(purchase.planId)) ?? 0;
+      } else if (typeof purchase.programAllowance === "number") {
+        allowance += purchase.programAllowance;
+      } else {
+        allowance = null;
+        break;
+      }
+    }
+    allowances.set(String(user._id), allowance);
   }
-  return allowance;
+  return allowances;
 };
+
+const resolveSelectionAllowance = async (user) =>
+  (await resolveSelectionAllowances([user])).get(String(user._id));
 
 /**
  * Whether the participant can select another program, for the selection
@@ -181,6 +209,50 @@ export const listMySelections = async (user, { status }) => {
     success: true,
     message: "Selections retrieved successfully",
     data: selections,
+  };
+};
+
+/**
+ * Adds or changes the goal on an active, unpaid selection. The stored plan
+ * (if any) is left as is — the participant recalculates — unless an admin has
+ * adjusted it, in which case only an admin can change it.
+ */
+export const updateSelectionGoal = async (id, data, user) => {
+  const selection = await SuccessCenterSelection.findOne({ _id: id, userId: user._id });
+  if (!selection) throw new AppError("Selection not found", HTTP_STATUS.NOT_FOUND);
+  if (selection.status !== ENUMS.SUCCESS_CENTER_SELECTION_STATUS.ACTIVE)
+    throw new AppError("This selection has been removed.", HTTP_STATUS.UNPROCESSABLE_ENTITY, [
+      { code: ENUMS.ACTIVATION_ERROR_CODE.SELECTION_REMOVED },
+    ]);
+  if (selection.activationStatus === ENUMS.SELECTION_ACTIVATION_STATUS.PAID)
+    throw new AppError(
+      "This program's activation is already paid, so its goal can't change.",
+      HTTP_STATUS.UNPROCESSABLE_ENTITY,
+      [{ code: ENUMS.ACTIVATION_ERROR_CODE.ACTIVATION_ALREADY_PAID }],
+    );
+  const locked = await Recommendation.exists({
+    selectionId: selection._id,
+    "adminOverrides.0": { $exists: true },
+  });
+  if (locked)
+    throw new AppError(
+      "Our team has adjusted this plan, so its goal can't be changed here. Contact support if your goal has changed.",
+      HTTP_STATUS.CONFLICT,
+      [{ code: ENUMS.ACTIVATION_ERROR_CODE.PLAN_LOCKED }],
+    );
+
+  selection.goalAmount = data.goalAmount;
+  selection.pricingSource = data.pricingSource ?? selection.pricingSource;
+  selection.verifiedQuoteAmount =
+    selection.pricingSource === ENUMS.SUCCESS_CENTER_PRICING_SOURCE.VERIFIED
+      ? (data.verifiedQuoteAmount ?? selection.verifiedQuoteAmount)
+      : undefined;
+  await selection.save();
+
+  return {
+    success: true,
+    message: "Goal updated",
+    data: await withDisplayInfo(SuccessCenterSelection.findById(selection._id)),
   };
 };
 

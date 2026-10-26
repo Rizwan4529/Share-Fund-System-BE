@@ -47,6 +47,8 @@ const monthOptions = z
     { error: "Plan month options must be a list of numbers" },
   )
   .min(1, "Add at least one month option")
+  // One per plan: Fast, Moderate, Longer.
+  .max(3, "Use at most three month options (Fast, Moderate and Longer)")
   .refine(
     (months) => months.every((value, index) => index === 0 || value > months[index - 1]),
     "List month options shortest first, without repeats (for example [6, 12, 24])",

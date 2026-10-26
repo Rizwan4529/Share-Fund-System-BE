@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { ENUMS, HTTP_STATUS } from "#/utils/constants.js";
+import { CHECKOUT_SESSION_TTL_MINUTES, ENUMS, HTTP_STATUS } from "#/utils/constants.js";
 import { AppError } from "#/utils/appError.js";
 import { getFrontendBaseUrl } from "#/utils/emailTemplate.js";
 import { getStripe, getWebhookSecret, toMinorUnits } from "#/config/stripe.js";
@@ -7,7 +7,14 @@ import { getPublishedLegalDocument } from "#/features/legal-documents/legal-docu
 import LegalAcceptance from "#/features/legal-acceptances/legal-acceptance.model.js";
 import Payment from "./payment.model.js";
 import { listFundingAccessPlans, resolveCheckoutItem } from "./payment-pricing.js";
-import { failCheckoutSession, fulfillCheckoutSession } from "./payment-fulfillment.js";
+import {
+  failCheckoutSession,
+  failPendingPayment,
+  fulfillCheckoutSession,
+  recordFailedAttempt,
+} from "./payment-fulfillment.js";
+import { retryMissingReceipt, sendPaymentReceipt } from "./payment-receipt.js";
+import { writeAuditLog } from "#/features/audit-logs/audit-log.service.js";
 
 const STATUS = ENUMS.PAYMENT_STATUS;
 const CODE = ENUMS.PAYMENT_ERROR_CODE;
@@ -76,10 +83,7 @@ const supersedePendingPayments = async (user, purpose, referenceId) => {
           stripe.checkout.sessions.expire(payment.checkoutSessionId),
         );
     }
-    await Payment.updateOne(
-      { _id: payment._id, status: STATUS.PENDING },
-      { $set: { status: STATUS.FAILED, failureReason: "Superseded by a newer checkout" } },
-    );
+    await failPendingPayment(payment._id, "Superseded by a newer checkout");
   }
 };
 
@@ -177,6 +181,11 @@ export const createCheckoutSession = async (
         ],
         metadata,
         payment_intent_data: { metadata },
+        // Charge in the currency the app shows and records (no automatic
+        // local-currency conversion), so receipts match the card statement.
+        adaptive_pricing: { enabled: false },
+        // Abandoned/declined checkouts settle (expired webhook) within this.
+        expires_at: Math.floor(Date.now() / 1000) + CHECKOUT_SESSION_TTL_MINUTES * 60,
         ...checkoutReturnUrls(payment._id),
       },
       { idempotencyKey: `checkout-session-${payment._id}` },
@@ -239,6 +248,10 @@ export const handleStripeWebhook = async (rawBody, signature) => {
     case "checkout.session.expired":
       await failCheckoutSession(session, "Checkout session expired");
       break;
+    case "payment_intent.payment_failed":
+      // A declined card; the checkout stays open for another try.
+      await recordFailedAttempt(event.data.object);
+      break;
     default:
       break; // not an event we act on
   }
@@ -290,6 +303,7 @@ export const getMyPayment = async (id, user) => {
   // TODO(refunds): refund requests + processing.
   await findOwnedPayment(id, user); // ownership check first
   await reconcilePendingPayment(id);
+  await retryMissingReceipt(await Payment.findById(id).lean());
   const payment = await findOwnedPayment(id, user);
   return {
     success: true,
@@ -314,11 +328,33 @@ export const cancelMyPayment = async (id, user) => {
       else if (session.status === "open")
         await callStripe((stripe) => stripe.checkout.sessions.expire(checkoutSessionId));
     }
-    if (stillPayable)
-      await Payment.updateOne(
-        { _id: id, status: STATUS.PENDING },
-        { $set: { status: STATUS.FAILED, failureReason: "Checkout canceled" } },
-      );
+    if (stillPayable) await failPendingPayment(id, "Checkout canceled");
   }
   return getMyPayment(id, user);
+};
+
+/** Admin: send a completed payment's receipt again (audited). */
+export const resendReceiptByAdmin = async (id, admin) => {
+  const payment = await Payment.findById(id);
+  if (!payment) throw new AppError("Payment not found", HTTP_STATUS.NOT_FOUND);
+  if (payment.status !== STATUS.COMPLETED)
+    throw new AppError("Only completed payments have a receipt.", HTTP_STATUS.UNPROCESSABLE_ENTITY);
+  const sent = await sendPaymentReceipt(payment);
+  await writeAuditLog({
+    actorId: admin._id,
+    action: ENUMS.AUDIT_LOG_ACTION.RESENT_PAYMENT_RECEIPT,
+    targetType: ENUMS.AUDIT_LOG_TARGET_TYPE.PAYMENT,
+    targetId: payment._id,
+    afterValue: { sent },
+  });
+  if (!sent)
+    throw new AppError(
+      "The receipt email couldn't be sent right now. Please try again shortly.",
+      HTTP_STATUS.BAD_GATEWAY,
+    );
+  return {
+    success: true,
+    message: "Receipt sent",
+    data: await Payment.findById(id).select("receiptRef receiptAttemptedAt").lean(),
+  };
 };

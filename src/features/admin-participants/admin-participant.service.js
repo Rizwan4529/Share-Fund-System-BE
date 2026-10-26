@@ -1,6 +1,6 @@
 import {
-  DEFAULT_SUCCESS_CENTER_LIMIT,
   ENUMS,
+  FOUNDER_PLAN_DISPLAY_NAMES,
   HTTP_STATUS,
   PARTICIPANT_STANDING_LABELS,
 } from "#/utils/constants.js";
@@ -9,7 +9,9 @@ import { writeAuditLog } from "#/features/audit-logs/audit-log.service.js";
 import User from "#/features/users/user.model.js";
 import SuccessProfile from "#/features/success-profiles/success-profile.model.js";
 import SuccessCenterSelection from "#/features/success-center-selections/success-center-selection.model.js";
-import FounderPlan from "#/features/founder-plans/founder-plan.model.js";
+import FounderPurchase from "#/features/founder-purchases/founder-purchase.model.js";
+import { resolveSelectionAllowances } from "#/features/success-center-selections/success-center-selection.service.js";
+import { listFundingAccessPlans } from "#/features/payments/payment-pricing.js";
 
 // Never expose password or verification internals.
 const SAFE_USER_FIELDS = [
@@ -72,17 +74,16 @@ const STANDING_EXPR = {
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const centersLabel = (used, total) => `${used} / ${total}`;
-
-/** Allowed centers = the founder plan's included centers, matched by tier. */
-const allowedCentersFor = async (founderTier) => {
-  if (!founderTier || founderTier === ENUMS.FOUNDER_TIER.NONE)
-    return DEFAULT_SUCCESS_CENTER_LIMIT;
-  const plan = await FounderPlan.findOne({ name: founderTier })
-    .select("includedSuccessCenters")
-    .lean();
-  return plan?.includedSuccessCenters?.length || DEFAULT_SUCCESS_CENTER_LIMIT;
-};
+/**
+ * Centers used vs allowed. The allowance is the SAME rule the selection check
+ * enforces (every Funding Access + Founder purchase; null = no limit when an
+ * admin granted planning access without a purchase; 0 = no access).
+ */
+const centersOf = (used, total) => ({
+  centersUsed: used,
+  centersTotal: total,
+  centersSelected: `${used} / ${total ?? "no limit"}`,
+});
 
 /**
  * Filters + sort shared by the paginated list and the CSV export, so an
@@ -185,23 +186,6 @@ const PARTICIPANT_ROW_STAGES = [
     },
   },
   {
-    $lookup: {
-      from: FounderPlan.collection.name,
-      let: { tier: "$founderTier" },
-      pipeline: [
-        { $match: { $expr: { $eq: ["$name", "$$tier"] } } },
-        {
-          $project: {
-            includedCount: {
-              $size: { $ifNull: ["$includedSuccessCenters", []] },
-            },
-          },
-        },
-      ],
-      as: "plan",
-    },
-  },
-  {
     $project: {
       name: 1,
       email: 1,
@@ -217,7 +201,6 @@ const PARTICIPANT_ROW_STAGES = [
       centersUsed: {
         $ifNull: [{ $arrayElemAt: ["$activeSelections.count", 0] }, 0],
       },
-      planCenters: { $arrayElemAt: ["$plan.includedCount", 0] },
     },
   },
 ];
@@ -227,16 +210,14 @@ const PARTICIPANT_COLLATION = {
   strength: 2, // case-insensitive name/email sorting
 };
 
-const toParticipantRow = ({ standing, planCenters, centersUsed, ...row }) => {
-  const centersTotal = planCenters || DEFAULT_SUCCESS_CENTER_LIMIT;
-  return {
+const toParticipantRows = async (rows) => {
+  const allowances = await resolveSelectionAllowances(rows);
+  return rows.map(({ standing, centersUsed, ...row }) => ({
     ...row,
     status: standing,
     statusLabel: PARTICIPANT_STANDING_LABELS[standing],
-    centersUsed,
-    centersTotal,
-    centersSelected: centersLabel(centersUsed, centersTotal),
-  };
+    ...centersOf(centersUsed, allowances.get(String(row._id))),
+  }));
 };
 
 /** Every participant matching the list filters (no paging) — for CSV export. */
@@ -245,7 +226,7 @@ export const findParticipantsForExport = async (filters) => {
     ...participantsPipeline(filters),
     ...PARTICIPANT_ROW_STAGES,
   ]).collation(PARTICIPANT_COLLATION);
-  return rows.map(toParticipantRow);
+  return toParticipantRows(rows);
 };
 
 export const listParticipants = async (query) => {
@@ -261,7 +242,7 @@ export const listParticipants = async (query) => {
     },
   ]).collation(PARTICIPANT_COLLATION);
   const total = result?.total[0]?.count ?? 0;
-  const participants = (result?.rows ?? []).map(toParticipantRow);
+  const participants = await toParticipantRows(result?.rows ?? []);
 
   return {
     success: true,
@@ -284,7 +265,7 @@ export const getParticipantById = async (userId) => {
     .lean();
   if (!user) throw new AppError("Participant not found", HTTP_STATUS.NOT_FOUND);
 
-  const [successProfile, selections, centersTotal] = await Promise.all([
+  const [successProfile, selections, allowances, purchases, fundingPlans] = await Promise.all([
     SuccessProfile.findOne({ userId }).select("-__v").lean(),
     SuccessCenterSelection.find({
       userId,
@@ -295,8 +276,16 @@ export const getParticipantById = async (userId) => {
       .sort({ selectedAt: -1 })
       .select("-__v")
       .lean(),
-    allowedCentersFor(user.founderTier),
+    resolveSelectionAllowances([user]),
+    FounderPurchase.find({ userId })
+      .populate("planId", "name")
+      .sort({ purchasedAt: -1 })
+      .select("purpose fundingAccessPlanKey planId programAllowance activationStatus purchasedAt paymentId")
+      .lean(),
+    listFundingAccessPlans(),
   ]);
+  const centers = centersOf(selections.length, allowances.get(String(user._id)));
+  const fundingLabels = new Map(fundingPlans.map((plan) => [plan.key, plan.label]));
 
   const { status: accountStatus, updatedAt, ...safeUser } = user;
   const standing = standingOf(user);
@@ -317,10 +306,23 @@ export const getParticipantById = async (userId) => {
       successProfile: successProfile ?? null,
       selections,
       centers: {
-        used: selections.length,
-        total: centersTotal,
-        label: centersLabel(selections.length, centersTotal),
+        used: centers.centersUsed,
+        total: centers.centersTotal,
+        label: centers.centersSelected,
       },
+      // What the participant bought (Funding Access plans and Founder tiers).
+      purchases: purchases.map((purchase) => ({
+        _id: purchase._id,
+        purpose: purchase.purpose,
+        label:
+          purchase.purpose === ENUMS.PAYMENT_PURPOSE.FUNDING_ACCESS
+            ? (fundingLabels.get(purchase.fundingAccessPlanKey) ?? purchase.fundingAccessPlanKey)
+            : (FOUNDER_PLAN_DISPLAY_NAMES[purchase.planId?.name] ?? purchase.planId?.name ?? null),
+        programAllowance: purchase.programAllowance ?? null,
+        activationStatus: purchase.activationStatus,
+        purchasedAt: purchase.purchasedAt,
+        paymentId: purchase.paymentId ?? null,
+      })),
     },
   };
 };
@@ -377,9 +379,8 @@ const updateParticipant = async (userId, changes, admin, action, message) => {
   return { success: true, message, data: accessSummary(after) };
 };
 
-// TODO(auth): suspended/closed are recorded here but NOT yet enforced -
-// nothing checks User.status today. Enforcement belongs in
-// middleware/auth.middleware.js (authenticate) and the login service.
+// Suspended/closed take effect immediately: the login service and
+// authenticate() (middleware/auth.middleware.js) refuse those accounts.
 export const updateParticipantStatus = (userId, { status }, admin) =>
   updateParticipant(
     userId,

@@ -17,15 +17,21 @@ import {
   getRevenueSummary,
   listEnrollments,
   listPayments,
+  resendPaymentReceipt,
 } from "./admin-report.controller.js";
 
-// Read-only admin reports, mounted at /api/v1/admin.
+// Admin reports, mounted at /api/v1/admin (the one write is audited).
 const router = express.Router();
 router.use(authenticate, authorize(ENUMS.ROLES.ADMIN));
 
 router.get("/enrollments", validateQuery(listEnrollmentsQuerySchema), listEnrollments);
 router.get("/payments", validateQuery(listPaymentsQuerySchema), listPayments);
 router.get("/payments/:id", validateParams(paymentIdParamSchema), getPayment);
+router.post(
+  "/payments/:id/resend-receipt",
+  validateParams(paymentIdParamSchema),
+  resendPaymentReceipt,
+);
 router.get("/revenue/summary", validateQuery(revenueQuerySchema), getRevenueSummary);
 // Admin home metrics; the optional range applies to time-based metrics.
 router.get("/overview", validateQuery(revenueQuerySchema), getOverview);

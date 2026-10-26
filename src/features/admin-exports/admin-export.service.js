@@ -38,7 +38,8 @@ const EXPORTS = {
       { header: "Success Profile completion %", value: (row) => row.profileCompletion ?? 0 },
       { header: "Success Profile complete", value: (row) => yesNo(row.questionnaireComplete) },
       { header: "Selected centers", value: (row) => row.centersUsed },
-      { header: "Center allowance", value: (row) => row.centersTotal },
+      // null = no limit (admin-granted access without a purchase).
+      { header: "Center allowance", value: (row) => row.centersTotal ?? "No limit" },
       { header: "Created", value: (row) => row.createdAt },
     ],
   },

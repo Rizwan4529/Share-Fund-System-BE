@@ -1,4 +1,4 @@
-import { ENUMS } from "#/utils/constants";
+import { ENUMS, RECOMMENDATION_ONE_TIME_KEY } from "#/utils/constants";
 import mongoose from "mongoose";
 
 const { Schema, model } = mongoose;
@@ -74,7 +74,12 @@ const recommendationSchema = new Schema(
           activationPercentage: { type: Number },
           totalActivationRequirement: { type: Number },
           scheduledPayment: { type: Number },
+          // Number of monthly payments (may be fewer than the plan term once
+          // the requirement is covered) and the last, possibly smaller, one.
           months: { type: Number },
+          finalPayment: { type: Number },
+          // The configured plan length this option was built from.
+          planTermMonths: { type: Number },
           growthPeriodDays: { type: Number },
           affordable: { type: Boolean },
           projection: optionProjectionSchema,
@@ -84,6 +89,8 @@ const recommendationSchema = new Schema(
     oneTimeOption: {
       totalActivationRequirement: { type: Number },
       payFullNow: { type: Boolean },
+      // Current savings cover the full amount.
+      affordable: { type: Boolean },
       projection: optionProjectionSchema,
     },
     // How the option projections were produced, for display and reproduction.
@@ -109,10 +116,12 @@ const recommendationSchema = new Schema(
       type: [String],
       default: [],
     },
+    // The option the participant chose (a paced label or "one_time").
     selectedOption: {
       type: String,
-      enum: Object.values(ENUMS.RECOMMENDATION_LABEL),
+      enum: [...Object.values(ENUMS.RECOMMENDATION_LABEL), RECOMMENDATION_ONE_TIME_KEY],
     },
+    selectedOptionAt: { type: Date },
     /* --- Admin oversight (recommendation-review.service.js) ---
      * The computed fields above are never modified by an admin. Overrides
      * live in adminOverrides and are applied on read (recommendation-

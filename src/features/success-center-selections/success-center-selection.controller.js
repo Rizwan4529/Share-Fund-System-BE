@@ -21,3 +21,12 @@ export const removeSelection = async (req, res) => {
   );
   return res.status(HTTP_STATUS.OK).json(response);
 };
+
+export const updateSelectionGoal = async (req, res) => {
+  const response = await selectionService.updateSelectionGoal(
+    req.params.id,
+    req.body,
+    req.user,
+  );
+  return res.status(HTTP_STATUS.OK).json(response);
+};

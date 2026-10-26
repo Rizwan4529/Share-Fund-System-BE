@@ -71,6 +71,30 @@ const TARGET_LABELS = {
   ],
   [ENUMS.AUDIT_LOG_TARGET_TYPE.SUCCESS_CENTER_CATEGORY]: ["name", (doc) => doc.name],
   [ENUMS.AUDIT_LOG_TARGET_TYPE.SUCCESS_CENTER_PROGRAM]: ["name", (doc) => doc.name],
+  // "Alice Anders · Deposit Program"
+  [ENUMS.AUDIT_LOG_TARGET_TYPE.RECOMMENDATION]: [
+    "userId selectionId",
+    (doc) =>
+      [
+        `${doc.userId?.firstName ?? ""} ${doc.userId?.lastName ?? ""}`.trim(),
+        doc.selectionId?.programId?.name,
+      ]
+        .filter(Boolean)
+        .join(" · ") || null,
+    [
+      { path: "userId", select: "firstName lastName" },
+      { path: "selectionId", select: "programId", populate: { path: "programId", select: "name" } },
+    ],
+  ],
+  // "Funding Access: Program bundle · Alice Anders"
+  [ENUMS.AUDIT_LOG_TARGET_TYPE.PAYMENT]: [
+    "description userId",
+    (doc) =>
+      [doc.description, `${doc.userId?.firstName ?? ""} ${doc.userId?.lastName ?? ""}`.trim()]
+        .filter(Boolean)
+        .join(" · ") || null,
+    [{ path: "userId", select: "firstName lastName" }],
+  ],
 };
 
 const withTargetLabels = async (logs) => {
@@ -85,8 +109,11 @@ const withTargetLabels = async (logs) => {
   for (const [type, ids] of idsByType) {
     const Model = mongoose.models[type];
     if (!Model) continue;
-    const [fields, format] = TARGET_LABELS[type];
-    const docs = await Model.find({ _id: { $in: [...ids] } }).select(fields).lean();
+    const [fields, format, populate = []] = TARGET_LABELS[type];
+    const docs = await Model.find({ _id: { $in: [...ids] } })
+      .select(fields)
+      .populate(populate)
+      .lean();
     for (const doc of docs) labels.set(`${type}:${doc._id}`, format(doc));
   }
 

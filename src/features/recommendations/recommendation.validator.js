@@ -17,6 +17,13 @@ export const selectionIdParamSchema = z.object({
   selectionId: OBJECT_ID,
 });
 
+export const selectOptionSchema = z.object({
+  option: oneOf(
+    [...Object.values(ENUMS.RECOMMENDATION_LABEL), RECOMMENDATION_ONE_TIME_KEY],
+    "Choose fast, moderate, longer or one_time",
+  ),
+});
+
 /* --- Admin review --- */
 
 export const recommendationIdParamSchema = z.object({

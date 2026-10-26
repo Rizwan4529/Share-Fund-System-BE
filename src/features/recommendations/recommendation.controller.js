@@ -18,6 +18,15 @@ export const getActivationForSelection = async (req, res) => {
   return res.status(HTTP_STATUS.OK).json(response);
 };
 
+export const selectActivationOption = async (req, res) => {
+  const response = await recommendationService.selectOptionForSelection(
+    req.params.selectionId,
+    req.body.option,
+    req.user,
+  );
+  return res.status(HTTP_STATUS.OK).json(response);
+};
+
 /* --- Admin review --- */
 
 export const listRecommendationsForReview = async (req, res) => {

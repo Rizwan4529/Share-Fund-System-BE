@@ -39,6 +39,9 @@ const roundUpToIncrement = (value, increment) =>
 const formatAmount = (value) =>
   value.toLocaleString("en-US", { maximumFractionDigits: 2 });
 
+// Currency rounding to cents (unit conversion, not a business value).
+const toCents = (value) => Math.round(value * 100) / 100;
+
 const buildInputSnapshot = (financials = {}) => {
   const figure = (key) => financials[key] ?? 0;
   const availableCashFlow =
@@ -46,7 +49,9 @@ const buildInputSnapshot = (financials = {}) => {
     figure("essentialExpenses") -
     figure("monthlyDebt") -
     figure("existingCommitments");
-  const comfortable = figure("comfortableMonthlyAmount");
+  // 0 is a real answer ("nothing comfortable"); only an unanswered amount
+  // (null) falls back to cash flow alone.
+  const comfortable = financials.comfortableMonthlyAmount ?? null;
 
   return {
     netMonthlyIncome: figure("netMonthlyIncome"),
@@ -57,18 +62,44 @@ const buildInputSnapshot = (financials = {}) => {
     currentSavings: figure("currentSavings"),
     emergencySavings: figure("emergencySavings"),
     availableCashFlow,
-    // The Success Profile stores 0 for "not answered", so an unanswered
-    // comfortable amount falls back to cash flow alone.
     safeCapacity:
-      comfortable > 0 ? Math.min(comfortable, availableCashFlow) : availableCashFlow,
+      comfortable == null ? availableCashFlow : Math.min(comfortable, availableCashFlow),
   };
 };
+
+/**
+ * Monthly schedule for one plan term. The regular payment is the requirement
+ * spread over the term, rounded UP to the increment; payments stop once the
+ * requirement is covered, so the last one may be smaller and the schedule may
+ * be shorter than the term. The total collected always equals the requirement.
+ */
+export const buildSchedule = (totalActivationRequirement, termMonths, increment) => {
+  const scheduledPayment = roundUpToIncrement(
+    totalActivationRequirement / termMonths,
+    increment,
+  );
+  const months = Math.min(
+    termMonths,
+    Math.ceil(Number((totalActivationRequirement / scheduledPayment).toPrecision(12))),
+  );
+  const finalPayment = toCents(totalActivationRequirement - scheduledPayment * (months - 1));
+  return { scheduledPayment, months, finalPayment };
+};
+
+/** One-time activation is paid in full from current savings (not emergency savings). */
+export const isOneTimeAffordable = (snapshot, totalActivationRequirement) =>
+  (snapshot?.currentSavings ?? 0) >= totalActivationRequirement;
 
 /**
  * Overall status. Ordered rules — the first match wins; reorder or edit a
  * condition to tune. Uses only comparisons, no thresholds.
  */
-const determineAffordabilityStatus = ({ options, snapshot, withinGoalRange }) => {
+const determineAffordabilityStatus = ({
+  options,
+  snapshot,
+  withinGoalRange,
+  oneTimeAffordable,
+}) => {
   // 1. Goal outside the program's configured range → can't activate as-is.
   if (!withinGoalRange) return STATUS.NOT_CURRENTLY_ELIGIBLE;
   // 2. The fastest plan fits the safe monthly capacity.
@@ -78,7 +109,9 @@ const determineAffordabilityStatus = ({ options, snapshot, withinGoalRange }) =>
     return STATUS.ELIGIBLE_WITH_ADJUSTMENT;
   // 4. No monthly room at all → income/expenses must change first.
   if (snapshot.availableCashFlow <= 0) return STATUS.INCREASE_INCOME_FIRST;
-  // 5. Some room, but not enough for any plan → save toward it first.
+  // 5. Current savings cover the full one-time activation → eligible that way.
+  if (oneTimeAffordable) return STATUS.ELIGIBLE_WITH_ADJUSTMENT;
+  // 6. Some room, but not enough for any plan → save toward it first.
   return STATUS.BUILD_SAVINGS_FIRST;
 };
 
@@ -106,7 +139,9 @@ const buildSuggestedAlternatives = ({
   if (status === STATUS.ELIGIBLE_WITH_ADJUSTMENT) {
     const fits = options.find((option) => option.affordable);
     suggestions.push(
-      `Choose the ${fits.label} plan: ${fits.months} months at ${formatAmount(fits.scheduledPayment)} per month fits your budget.`,
+      fits
+        ? `Choose the ${fits.label} plan: ${fits.months} months at ${formatAmount(fits.scheduledPayment)} per month fits your budget.`
+        : `Pay the full one-time activation of ${formatAmount(totalActivationRequirement)} from your current savings. The monthly plans are above your comfortable monthly amount.`,
     );
   }
 
@@ -122,16 +157,6 @@ const buildSuggestedAlternatives = ({
       "Free up monthly cash flow by reducing essential expenses, debt payments, or other commitments.",
       "Look for ways to increase your monthly income.",
       "Consider a lower-cost goal once you have room in your monthly budget.",
-    );
-  }
-
-  if (
-    status !== STATUS.ELIGIBLE &&
-    status !== STATUS.NOT_CURRENTLY_ELIGIBLE &&
-    snapshot.currentSavings >= totalActivationRequirement
-  ) {
-    suggestions.push(
-      `Your current savings could cover the full one-time activation of ${formatAmount(totalActivationRequirement)}.`,
     );
   }
 
@@ -171,21 +196,30 @@ export const calculateActivationPlan = ({
     .sort((a, b) => a - b)
     .slice(0, PLAN_LABELS.length);
 
-  const pacedOptions = monthOptions.map((months, index) => {
-    const scheduledPayment = roundUpToIncrement(
-      totalActivationRequirement / months,
+  const pacedOptions = [];
+  monthOptions.forEach((termMonths, index) => {
+    const schedule = buildSchedule(
+      totalActivationRequirement,
+      termMonths,
       rules.roundingIncrement,
     );
-    return {
+    // Small requirements can give several terms the same schedule; keep one.
+    const duplicate = pacedOptions.some(
+      (option) =>
+        option.months === schedule.months &&
+        option.scheduledPayment === schedule.scheduledPayment,
+    );
+    if (duplicate) return;
+    pacedOptions.push({
       label: PLAN_LABELS[index],
-      months,
-      scheduledPayment,
+      planTermMonths: termMonths,
+      ...schedule,
       totalActivationRequirement,
       activationPercentage,
       growthPeriodDays: rules.growthPeriodDays ?? null,
       totalGoal: goalAmount,
-      affordable: scheduledPayment <= snapshot.safeCapacity,
-    };
+      affordable: schedule.scheduledPayment <= snapshot.safeCapacity,
+    });
   });
 
   // Timeline + funding range estimates, in the same pass as the figures.
@@ -200,10 +234,12 @@ export const calculateActivationPlan = ({
     (rules.minGoalAmount == null || goalAmount >= rules.minGoalAmount) &&
     (rules.maxGoalAmount == null || goalAmount <= rules.maxGoalAmount);
 
+  const oneTimeAffordable = isOneTimeAffordable(snapshot, totalActivationRequirement);
   const affordabilityStatus = determineAffordabilityStatus({
     options,
     snapshot,
     withinGoalRange,
+    oneTimeAffordable,
   });
 
   return {
@@ -215,6 +251,7 @@ export const calculateActivationPlan = ({
     oneTimeOption: {
       totalActivationRequirement,
       payFullNow: true,
+      affordable: oneTimeAffordable,
       projection: oneTimeProjection,
     },
     projection,

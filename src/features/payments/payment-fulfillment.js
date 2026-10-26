@@ -112,6 +112,9 @@ const activate = async (payment, session) => {
           founderTier: plan?.name,
           foundingParticipant: true,
           founderBenefitsVersion: plan?.founderBenefitsVersion,
+          // A Founder plan includes Success Center programs, so it unlocks
+          // planning access just like a Funding Access plan.
+          planningAccessStatus: ENUMS.PLANNING_ACCESS_STATUS.ACTIVE,
         },
         $min: { founderActivationDate: new Date() },
       },
@@ -181,11 +184,14 @@ const findPaymentForSession = async (checkoutSession) => {
   return payment;
 };
 
-export const failCheckoutSession = async (checkoutSession, reason) => {
-  const payment = await findPaymentForSession(checkoutSession);
-  if (!payment) return;
+/**
+ * Pending → failed (only if still pending) and audited — the single path for
+ * every failure: expired, canceled, superseded, amount mismatch.
+ * @returns the failed payment, or null if it was no longer pending
+ */
+export const failPendingPayment = async (paymentId, reason) => {
   const failed = await Payment.findOneAndUpdate(
-    { _id: payment._id, status: STATUS.PENDING },
+    { _id: paymentId, status: STATUS.PENDING },
     { $set: { status: STATUS.FAILED, failureReason: reason } },
     { new: true },
   );
@@ -195,7 +201,44 @@ export const failCheckoutSession = async (checkoutSession, reason) => {
       action: ENUMS.AUDIT_LOG_ACTION.FAILED_PAYMENT,
       targetType: ENUMS.AUDIT_LOG_TARGET_TYPE.PAYMENT,
       targetId: failed._id,
+      beforeValue: { status: STATUS.PENDING },
       afterValue: { status: failed.status, failureReason: reason },
+    });
+  return failed;
+};
+
+export const failCheckoutSession = async (checkoutSession, reason) => {
+  const payment = await findPaymentForSession(checkoutSession);
+  if (!payment) return;
+  await failPendingPayment(payment._id, reason);
+};
+
+/**
+ * payment_intent.payment_failed: a card was declined while the checkout is
+ * still open. The payment stays pending (another card can be tried); the
+ * attempt is recorded and audited. The intent carries our metadata.
+ */
+export const recordFailedAttempt = async (paymentIntent) => {
+  const paymentId = paymentIntent.metadata?.paymentId;
+  if (!mongoose.isValidObjectId(paymentId)) return;
+  const reason =
+    paymentIntent.last_payment_error?.message ?? "The payment was declined";
+  const updated = await Payment.findOneAndUpdate(
+    { _id: paymentId, status: STATUS.PENDING },
+    { $set: { lastAttemptFailureReason: reason, lastAttemptFailedAt: new Date() } },
+    { new: true },
+  );
+  if (updated)
+    await writeAuditLog({
+      actorId: updated.userId,
+      action: ENUMS.AUDIT_LOG_ACTION.FAILED_PAYMENT_ATTEMPT,
+      targetType: ENUMS.AUDIT_LOG_TARGET_TYPE.PAYMENT,
+      targetId: updated._id,
+      afterValue: {
+        status: updated.status,
+        declineReason: reason,
+        declineCode: paymentIntent.last_payment_error?.decline_code ?? null,
+      },
     });
 };
 
@@ -240,7 +283,7 @@ export const fulfillCheckoutSession = async (checkoutSession) => {
           legalAcceptanceId,
           ...(purchaseId && { purchaseId }),
         },
-        $unset: { failureReason: 1 },
+        $unset: { failureReason: 1, lastAttemptFailureReason: 1, lastAttemptFailedAt: 1 },
       },
       { new: true, session },
     );

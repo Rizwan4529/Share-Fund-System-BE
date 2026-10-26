@@ -1,6 +1,12 @@
-import { HTTP_STATUS, SETTING_KEYS } from "#/utils/constants.js";
+import { ENUMS, HTTP_STATUS, SETTING_KEYS } from "#/utils/constants.js";
 import { AppError } from "#/utils/appError.js";
 import { getSettingsByKeys } from "#/features/settings/setting.service.js";
+
+// The activation range configured for each goal type ({ min, max } in %).
+const RANGE_SETTING_BY_GOAL_NATURE = {
+  [ENUMS.SUCCESS_CENTER_GOAL_NATURE.RECURING]: SETTING_KEYS.ACTIVATION_RECURRING_PERCENTAGE_RANGE,
+  [ENUMS.SUCCESS_CENTER_GOAL_NATURE.ONE_TIME]: SETTING_KEYS.ACTIVATION_ONE_TIME_PERCENTAGE_RANGE,
+};
 
 const isPositiveNumber = (value) => typeof value === "number" && value > 0;
 const isNonNegativeNumber = (value) => typeof value === "number" && value >= 0;
@@ -23,9 +29,12 @@ const RULE_DEFINITIONS = [
     required: true,
     isValid: isPositiveNumber,
   },
+  // Bounds: the program's own value, else the range configured for its goal
+  // type (recurring / one-time), else the global bound.
   {
     name: "percentageMin",
     programField: "activationPercentageMin",
+    rangeBound: "min",
     settingKey: SETTING_KEYS.ACTIVATION_PERCENTAGE_MIN,
     required: false,
     isValid: isNonNegativeNumber,
@@ -33,6 +42,7 @@ const RULE_DEFINITIONS = [
   {
     name: "percentageMax",
     programField: "activationPercentageMax",
+    rangeBound: "max",
     settingKey: SETTING_KEYS.ACTIVATION_PERCENTAGE_MAX,
     required: false,
     isValid: isPositiveNumber,
@@ -105,33 +115,44 @@ const RULE_DEFINITIONS = [
  * source) and the exact settings versions used, for the snapshot.
  */
 export const resolveActivationRules = async (program) => {
-  const settings = await getSettingsByKeys(
-    RULE_DEFINITIONS.map((rule) => rule.settingKey),
-  );
+  const rangeKey = RANGE_SETTING_BY_GOAL_NATURE[program.goalNature];
+  const settings = await getSettingsByKeys([
+    ...RULE_DEFINITIONS.map((rule) => rule.settingKey),
+    ...(rangeKey ? [rangeKey] : []),
+  ]);
+  const range = rangeKey ? settings.get(rangeKey) : null;
 
   const resolved = {};
   const settingsUsed = [];
   const missing = [];
   const invalid = [];
+  const recordSetting = (setting) => {
+    if (settingsUsed.some((used) => used.key === setting.key)) return;
+    settingsUsed.push({
+      key: setting.key,
+      settingId: setting._id,
+      value: setting.value,
+      version: (setting.versionHistory?.length ?? 0) + 1,
+      updatedAt: setting.updatedAt,
+    });
+  };
 
   for (const rule of RULE_DEFINITIONS) {
     const programValue = rule.programField
       ? program.activationRules?.[rule.programField]
       : null;
+    const rangeValue = rule.rangeBound ? range?.value?.[rule.rangeBound] : null;
     const setting = settings.get(rule.settingKey);
 
     let entry = null;
     if (programValue != null) {
       entry = { value: programValue, source: "program" };
+    } else if (typeof rangeValue === "number") {
+      entry = { value: rangeValue, source: "setting" };
+      recordSetting(range);
     } else if (setting) {
       entry = { value: setting.value, source: "setting" };
-      settingsUsed.push({
-        key: setting.key,
-        settingId: setting._id,
-        value: setting.value,
-        version: (setting.versionHistory?.length ?? 0) + 1,
-        updatedAt: setting.updatedAt,
-      });
+      recordSetting(setting);
     }
 
     if (!entry) {
@@ -149,15 +170,25 @@ export const resolveActivationRules = async (program) => {
     resolved[rule.name] = entry;
   }
 
+  if (
+    resolved.percentageMin &&
+    resolved.percentageMax &&
+    resolved.percentageMin.value > resolved.percentageMax.value
+  )
+    invalid.push("activation percentage minimum is above the maximum");
+
   if (missing.length || invalid.length) {
     const problems = [
       missing.length &&
         `not configured: ${missing.join(", ")} (set on the program or in settings)`,
       invalid.length && `invalid value: ${invalid.join(", ")}`,
     ].filter(Boolean);
+    // Admin detail for the logs; the participant gets a plain message + code.
+    console.error(`Activation rules for program ${program._id}: ${problems.join("; ")}`);
     throw new AppError(
-      `Activation rules are incomplete — ${problems.join("; ")}`,
-      HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      "This program's activation rules aren't set up correctly yet, so a plan can't be calculated. Please try again later.",
+      HTTP_STATUS.UNPROCESSABLE_ENTITY,
+      [{ code: ENUMS.ACTIVATION_ERROR_CODE.RULES_INVALID }],
     );
   }
 
