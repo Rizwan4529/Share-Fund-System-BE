@@ -1,4 +1,4 @@
-import { ENUMS, HTTP_STATUS } from "#/utils/constants.js";
+import { ENUMS, FOUNDER_PLAN_TERM_FIELDS, HTTP_STATUS } from "#/utils/constants.js";
 import { AppError } from "#/utils/appError.js";
 import FounderPlan from "./founder-plan.model.js";
 import SuccessCenterProgram from "#/features/success-center-programs/success-center-program.model.js";
@@ -9,7 +9,32 @@ const PROGRAM_FIELDS = "name status programType goalNature";
 const populatePlans = (query) =>
   query
     .populate("includedSuccessCenters", PROGRAM_FIELDS)
-    .populate("eligiblePrograms", PROGRAM_FIELDS);
+    .populate("eligiblePrograms", PROGRAM_FIELDS)
+    .populate("versionHistory.updatedBy", "firstName lastName email");
+
+/** The plan's current terms as plain, comparable values. */
+const termsOf = (plan) => {
+  const raw = plan.toObject({ depopulate: true });
+  return Object.fromEntries(
+    FOUNDER_PLAN_TERM_FIELDS.map((field) => {
+      const value = raw[field];
+      // Program lists compare as sets: the editor may send them in any order.
+      if (Array.isArray(value)) return [field, value.map(String).sort()];
+      if (field === "fundingCap")
+        return [field, { standard: value?.standard ?? null, premium: value?.premium ?? null }];
+      return [field, value ?? null];
+    }),
+  );
+};
+
+const sameTerms = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+/** "v1" -> "v2", "2026-a3" -> "2026-a4"; anything without a trailing number gets "-2". */
+const nextBenefitsVersion = (current) => {
+  const value = current || "v1";
+  const match = value.match(/^(.*?)(\d+)$/);
+  return match ? `${match[1]}${Number(match[2]) + 1}` : `${value}-2`;
+};
 
 const auditFounderPlan = async (user, action, plan, beforeValue, afterValue) => {
   await writeAuditLog({
@@ -122,7 +147,20 @@ export const updateFounderPlan = async (id, data, user) => {
   ]);
 
   const beforeValue = plan.toObject();
+  const beforeTerms = termsOf(plan);
   Object.assign(plan, data);
+
+  // Any change to the terms is versioned: the old terms go into history and,
+  // unless the admin set it themselves, the benefits version moves on so
+  // purchases made before and after the change can be told apart.
+  if (!sameTerms(beforeTerms, termsOf(plan))) {
+    const versionChangedByAdmin =
+      data.founderBenefitsVersion !== undefined &&
+      data.founderBenefitsVersion !== beforeTerms.founderBenefitsVersion;
+    if (!versionChangedByAdmin)
+      plan.founderBenefitsVersion = nextBenefitsVersion(beforeTerms.founderBenefitsVersion);
+    plan.versionHistory.push({ terms: beforeTerms, updatedBy: user._id, at: new Date() });
+  }
   await plan.save();
   await auditFounderPlan(
     user,

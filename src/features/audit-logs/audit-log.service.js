@@ -1,3 +1,5 @@
+import mongoose from "mongoose";
+import { ENUMS } from "#/utils/constants.js";
 import AuditLog from "./audit-log.model.js";
 
 const toSnapshot = (value) => {
@@ -40,11 +42,56 @@ export const listAuditLogs = async (query = {}) => {
   const logs = await AuditLog.find(filter)
     .sort({ createdAt: -1 })
     .limit(query.limit || 100)
-    .populate("actorId", "firstName lastName email role");
+    .populate("actorId", "firstName lastName email role")
+    .lean();
 
   return {
     success: true,
     message: "Audit logs retrieved successfully",
-    data: logs,
+    data: await withTargetLabels(logs),
   };
+};
+
+/*
+ * A readable name for each target (a setting's key, a document's title and
+ * version...) so the audit log doesn't show bare ids. targetType is the model
+ * name (it is also the refPath), so labels are looked up per type in one query.
+ */
+const TARGET_LABELS = {
+  [ENUMS.AUDIT_LOG_TARGET_TYPE.SETTING]: ["key", (doc) => doc.key],
+  [ENUMS.AUDIT_LOG_TARGET_TYPE.SETTING_CATEGORY]: ["label", (doc) => doc.label],
+  [ENUMS.AUDIT_LOG_TARGET_TYPE.FOUNDER_PLAN]: ["name", (doc) => doc.name],
+  [ENUMS.AUDIT_LOG_TARGET_TYPE.LEGAL_DOCUMENT]: [
+    "title version",
+    (doc) => `${doc.title} v${doc.version}`,
+  ],
+  [ENUMS.AUDIT_LOG_TARGET_TYPE.USER]: [
+    "firstName lastName email",
+    (doc) => `${doc.firstName ?? ""} ${doc.lastName ?? ""}`.trim() || doc.email,
+  ],
+  [ENUMS.AUDIT_LOG_TARGET_TYPE.SUCCESS_CENTER_CATEGORY]: ["name", (doc) => doc.name],
+  [ENUMS.AUDIT_LOG_TARGET_TYPE.SUCCESS_CENTER_PROGRAM]: ["name", (doc) => doc.name],
+};
+
+const withTargetLabels = async (logs) => {
+  const idsByType = new Map();
+  for (const log of logs) {
+    if (!log.targetId || !TARGET_LABELS[log.targetType]) continue;
+    if (!idsByType.has(log.targetType)) idsByType.set(log.targetType, new Set());
+    idsByType.get(log.targetType).add(String(log.targetId));
+  }
+
+  const labels = new Map();
+  for (const [type, ids] of idsByType) {
+    const Model = mongoose.models[type];
+    if (!Model) continue;
+    const [fields, format] = TARGET_LABELS[type];
+    const docs = await Model.find({ _id: { $in: [...ids] } }).select(fields).lean();
+    for (const doc of docs) labels.set(`${type}:${doc._id}`, format(doc));
+  }
+
+  return logs.map((log) => ({
+    ...log,
+    targetLabel: labels.get(`${log.targetType}:${log.targetId}`) ?? null,
+  }));
 };

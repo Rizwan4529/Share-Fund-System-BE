@@ -30,6 +30,9 @@ const alreadyPaid = (message) =>
 
 const isPositive = (value) => typeof value === "number" && value > 0;
 
+/** Plans are on sale unless an admin marked them `active: false`. */
+const isOnSale = (plan) => plan?.active !== false;
+
 /** Checkout currency + Funding Access plans, from the pricing settings. */
 const loadPricingSettings = async () => {
   const settings = await getSettingsByKeys([
@@ -52,11 +55,11 @@ const requireCurrency = (currency) => {
   return currency;
 };
 
-/** Valid Funding Access plans as configured in settings. */
+/** Funding Access plans on sale, as configured in settings. */
 export const listFundingAccessPlans = async () => {
   const { currency, fundingAccessPlans } = await loadPricingSettings();
   return fundingAccessPlans
-    .filter((plan) => plan?.key && isPositive(plan.price))
+    .filter((plan) => plan?.key && isPositive(plan.price) && isOnSale(plan))
     .map((plan) => ({
       key: plan.key,
       label: plan.label ?? plan.key,
@@ -71,6 +74,8 @@ const resolveFundingAccess = async (referenceId, user) => {
   const plan = fundingAccessPlans.find((item) => item?.key === referenceId);
   if (!plan || !isPositive(plan.price))
     throw unresolved("That Funding Access plan doesn't exist or has no price.");
+  if (!isOnSale(plan))
+    throw unresolved("That Funding Access plan isn't available right now.");
 
   const owned = await FounderPurchase.exists({
     userId: user._id,

@@ -31,3 +31,12 @@ export const updateSetting = async (req, res) => {
   );
   return res.status(HTTP_STATUS.OK).json(response);
 };
+
+export const cancelScheduledChange = async (req, res) => {
+  const response = await settingService.cancelScheduledChange(
+    req.params.key,
+    req.params.changeId,
+    req.user,
+  );
+  return res.status(HTTP_STATUS.OK).json(response);
+};

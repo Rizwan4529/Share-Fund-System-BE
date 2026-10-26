@@ -1,4 +1,4 @@
-import { ENUMS } from "#/utils/constants.js";
+import { ENUMS, OBJECT_ID } from "#/utils/constants.js";
 import { z } from "zod";
 
 const settingValueSchema = z.any().refine((value) => {
@@ -36,4 +36,9 @@ export const settingKeyParamSchema = z.object({
 
 export const settingCategoryParamSchema = z.object({
   category: z.string().min(1, "Category is required"),
+});
+
+export const scheduledChangeParamSchema = z.object({
+  key: z.string().min(1, "Key is required"),
+  changeId: OBJECT_ID,
 });

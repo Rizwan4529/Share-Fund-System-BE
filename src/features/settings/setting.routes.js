@@ -2,11 +2,13 @@ import { validate, validateParams } from "#/middleware/validate.middleware.js";
 import express from "express";
 import {
   insertSettingsSchema,
+  scheduledChangeParamSchema,
   settingCategoryParamSchema,
   settingKeyParamSchema,
   updateSettingSchema,
 } from "./setting.validator.js";
 import {
+  cancelScheduledChange,
   getSettingByKey,
   getSettingsByCategory,
   insertSettings,
@@ -32,6 +34,11 @@ router.patch(
   validateParams(settingKeyParamSchema),
   validate(updateSettingSchema),
   updateSetting,
+);
+router.delete(
+  "/:key/scheduled/:changeId",
+  validateParams(scheduledChangeParamSchema),
+  cancelScheduledChange,
 );
 router.post("/", validate(insertSettingsSchema), insertSettings);
 

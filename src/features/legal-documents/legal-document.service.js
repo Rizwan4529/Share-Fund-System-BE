@@ -2,6 +2,7 @@ import { ENUMS, HTTP_STATUS } from "#/utils/constants.js";
 import { AppError } from "#/utils/appError.js";
 import LegalDocument from "./legal-document.model.js";
 import { writeAuditLog } from "#/features/audit-logs/audit-log.service.js";
+import { legalHtmlHasText, sanitizeLegalHtml } from "./sanitize-legal-html.js";
 
 const auditLegalDocument = async (
   user,
@@ -24,11 +25,28 @@ const findLatestByType = async (documentType) => {
   return LegalDocument.findOne({ documentType }).sort({ version: -1 });
 };
 
+/** Published versions whose effective date has arrived (or that have none). */
+const inEffect = (now = new Date()) => ({
+  status: ENUMS.LEGAL_DOCUMENT_STATUS.PUBLISHED,
+  $or: [{ effectiveDate: { $lte: now } }, { effectiveDate: null }],
+});
+
+/** The version participants see: the newest published one already in effect. */
 const findPublishedByType = async (documentType) => {
-  return LegalDocument.findOne({
-    documentType,
-    status: ENUMS.LEGAL_DOCUMENT_STATUS.PUBLISHED,
-  }).sort({ version: -1 });
+  return LegalDocument.findOne({ documentType, ...inEffect() }).sort({
+    version: -1,
+  });
+};
+
+/** Strips disallowed HTML; rejects content left with no visible text. */
+const cleanContent = (content) => {
+  if (content === undefined) return undefined;
+  const clean = sanitizeLegalHtml(content);
+  if (!legalHtmlHasText(clean))
+    throw new AppError("Content is required", HTTP_STATUS.BAD_REQUEST, [
+      { field: "content", message: "Content is required" },
+    ]);
+  return clean;
 };
 
 const findByTypeAndVersion = async (documentType, version) => {
@@ -90,9 +108,10 @@ export const listLegalDocuments = async (user) => {
     };
   }
 
-  const documents = await LegalDocument.find({
-    status: ENUMS.LEGAL_DOCUMENT_STATUS.PUBLISHED,
-  }).sort({ documentType: 1, version: -1 });
+  const documents = await LegalDocument.find(inEffect()).sort({
+    documentType: 1,
+    version: -1,
+  });
 
   return {
     success: true,
@@ -151,6 +170,7 @@ export const createLegalDocument = async (data, user) => {
 
   const document = new LegalDocument({
     ...data,
+    content: cleanContent(data.content),
     version: 1,
     status: ENUMS.LEGAL_DOCUMENT_STATUS.DRAFT,
     updatedBy: user._id,
@@ -178,6 +198,7 @@ export const updateLegalDocument = async (documentType, data, user) => {
       `Legal document '${documentType}' not found`,
       HTTP_STATUS.NOT_FOUND,
     );
+  const content = cleanContent(data.content);
 
   if (latest.status === ENUMS.LEGAL_DOCUMENT_STATUS.DRAFT) {
     const beforeValue = {
@@ -187,7 +208,7 @@ export const updateLegalDocument = async (documentType, data, user) => {
       status: latest.status,
     };
     if (data.title !== undefined) latest.title = data.title;
-    if (data.content !== undefined) latest.content = data.content;
+    if (content !== undefined) latest.content = content;
     latest.updatedBy = user._id;
     await latest.save();
     await auditLegalDocument(
@@ -208,7 +229,7 @@ export const updateLegalDocument = async (documentType, data, user) => {
   const document = new LegalDocument({
     documentType,
     title: data.title ?? latest.title,
-    content: data.content ?? latest.content,
+    content: content ?? latest.content,
     version: latest.version + 1,
     status: ENUMS.LEGAL_DOCUMENT_STATUS.DRAFT,
     updatedBy: user._id,
@@ -269,9 +290,12 @@ export const publishLegalDocument = async (
     },
   );
 
+  const scheduled = document.effectiveDate > new Date();
   return {
     success: true,
-    message: "Legal document published successfully",
+    message: scheduled
+      ? `Legal document published. It becomes the current version on ${document.effectiveDate.toISOString().slice(0, 10)}; participants see the previous version until then.`
+      : "Legal document published successfully",
     data: document,
   };
 };

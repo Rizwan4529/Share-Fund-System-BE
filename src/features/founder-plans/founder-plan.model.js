@@ -60,6 +60,19 @@ const founderPlanSchema = new Schema(
       enum: Object.values(ENUMS.FOUNDER_PLAN_STATUS),
       default: ENUMS.FOUNDER_PLAN_STATUS.ACTIVE,
     },
+    // Previous terms, oldest first: one entry each time a term field
+    // (FOUNDER_PLAN_TERM_FIELDS) changed. Founders keep the terms of the
+    // founderBenefitsVersion they bought under.
+    versionHistory: {
+      type: [
+        {
+          terms: { type: Schema.Types.Mixed, required: true },
+          updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
+          at: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+    },
   },
   { timestamps: true },
 );

@@ -1,10 +1,21 @@
 import { ENUMS, OBJECT_ID } from "#/utils/constants.js";
 import { z } from "zod";
 
+const capAmount = z
+  .number({ error: "Funding cap must be a number" })
+  .min(0, "Funding cap can't be negative")
+  .nullable()
+  .optional();
+
 const fundingCapSchema = z.object({
-  standard: z.number().nullable().optional(),
-  premium: z.number().nullable().optional(),
+  standard: capAmount,
+  premium: capAmount,
 });
+
+// Checkout refuses a $0 tier, so a plan must cost something to be listable.
+const priceSchema = z
+  .number({ error: "Price is required" })
+  .positive("Price must be greater than 0");
 
 export const createFounderPlanSchema = z.object({
   name: z
@@ -14,9 +25,7 @@ export const createFounderPlanSchema = z.object({
       (value) => Object.values(ENUMS.FOUNDER_PLAN_NAME).includes(value),
       "Invalid founder plan name",
     ),
-  price: z
-    .number({ error: "Price is required" })
-    .min(0, "Price cannot be negative"),
+  price: priceSchema,
   includedSuccessCenters: z
     .array(OBJECT_ID)
     .min(1, "At least one success center is required"),
@@ -51,7 +60,7 @@ export const createFounderPlanSchema = z.object({
 
 export const updateFounderPlanSchema = z
   .object({
-    price: z.number().min(0, "Price cannot be negative").optional(),
+    price: priceSchema.optional(),
     includedSuccessCenters: z
       .array(OBJECT_ID)
       .min(1, "At least one success center is required")

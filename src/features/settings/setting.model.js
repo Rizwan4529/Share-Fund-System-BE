@@ -59,7 +59,32 @@ const settingsSchema = new Schema(
         },
       ],
     },
+    // Changes dated in the future. Each one replaces `value` (and moves the
+    // old value into versionHistory) once its effectiveDate arrives.
+    scheduledChanges: {
+      type: [
+        {
+          value: {
+            type: Schema.Types.Mixed,
+            required: [true, "Value is required"],
+          },
+          effectiveDate: {
+            type: Date,
+            required: [true, "Effective date is required"],
+          },
+          updatedBy: {
+            type: Schema.Types.ObjectId,
+            ref: "User",
+            required: [true, "Updated by is required"],
+          },
+          at: { type: Date, default: Date.now },
+          reason: { type: String },
+        },
+      ],
+      default: [],
+    },
     effectiveDate: {
+      // When the current value took effect.
       type: Date,
     },
     updatedBy: {

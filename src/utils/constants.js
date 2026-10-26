@@ -375,6 +375,7 @@ export const ENUMS = {
   AUDIT_LOG_ACTION: {
     UPDATE_SETTING: "updated_setting",
     CREATED_SETTING: "created_setting",
+    CANCELLED_SETTING_CHANGE: "cancelled_setting_change",
     ADJUSTED_RECOMMENDATION: "adjusted_recommendation",
     APPROVED_RECOMMENDATION: "approved_recommendation",
     RESET_RECOMMENDATION: "reset_recommendation",
@@ -517,6 +518,11 @@ export const ENUMS = {
   PLANNING_ACCESS_STATUS: {
     INACTIVE: "inactive",
     ACTIVE: "active",
+  },
+  // Why a program selection was refused (sent in `errors`).
+  SELECTION_ERROR_CODE: {
+    PLANNING_ACCESS_REQUIRED: "PLANNING_ACCESS_REQUIRED",
+    SELECTION_LIMIT_REACHED: "SELECTION_LIMIT_REACHED",
   },
   SELECTION_ACTIVATION_STATUS: {
     UNPAID: "unpaid",
@@ -721,11 +727,35 @@ export const SETTING_KEYS = {
   PROJECTION_FUNDING_START_OFFSET_DAYS: "projection.fundingStartOffsetDays",
   // Width of the estimated funding range, earliest → latest, in days.
   PROJECTION_FUNDING_RANGE_DAYS: "projection.fundingRangeDays",
-  // [{ key, label, price, programAllowance }] — the Funding Access plans.
+  // [{ key, label, price, programAllowance, active }] — the Funding Access plans.
   PRICING_FUNDING_ACCESS_PLANS: "pricing.fundingAccessPlans",
   // { code: "USD" } — checkout currency (settings values can't be strings).
   PRICING_CURRENCY: "pricing.currency",
+  // Financial rules from the project brief. Stored for configuration and
+  // simulation; Phase 1 calculations don't read them yet.
+  PLATFORM_FEE_PERCENTAGE: "platformFee.percentage",
+  THRESHOLD_BASELINE_PERCENTAGE: "threshold.baselinePercentage",
+  RESERVE_PARTICIPATION_MIN: "reserve.participationPercentageMin",
+  RESERVE_PARTICIPATION_MAX: "reserve.participationPercentageMax",
+  // { min, max } — activation % ranges by goal nature.
+  ACTIVATION_RECURRING_PERCENTAGE_RANGE: "activation.recurringPercentageRange",
+  ACTIVATION_ONE_TIME_PERCENTAGE_RANGE: "activation.oneTimePercentageRange",
 };
+
+/**
+ * Founder plan fields that make up its terms. A change to any of them is kept
+ * in the plan's versionHistory and moves founderBenefitsVersion on.
+ */
+export const FOUNDER_PLAN_TERM_FIELDS = [
+  "price",
+  "includedSuccessCenters",
+  "eligiblePrograms",
+  "fundingCap",
+  "majorOneTimeProgramsEligible",
+  "priorityLevel",
+  "bmisPlanningLevel",
+  "founderBenefitsVersion",
+];
 
 /** Key for the one-time option in admin adjustments (paced plans use RECOMMENDATION_LABEL). */
 export const RECOMMENDATION_ONE_TIME_KEY = "one_time";
