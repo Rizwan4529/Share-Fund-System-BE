@@ -18,7 +18,8 @@ import {
 
 const router = express.Router();
 
-router.use(authenticate);
+// The participant catalog is served by /success-centers (published only).
+router.use(authenticate, authorize(ENUMS.ROLES.ADMIN));
 
 router.get(
   "/",
@@ -32,20 +33,17 @@ router.get(
 );
 router.post(
   "/",
-  authorize(ENUMS.ROLES.ADMIN),
   validate(createSuccessCenterProgramSchema),
   createSuccessCenterProgram,
 );
 router.patch(
   "/:id",
-  authorize(ENUMS.ROLES.ADMIN),
   validateParams(successCenterProgramIdParamSchema),
   validate(updateSuccessCenterProgramSchema),
   updateSuccessCenterProgram,
 );
 router.delete(
   "/:id",
-  authorize(ENUMS.ROLES.ADMIN),
   validateParams(successCenterProgramIdParamSchema),
   deleteSuccessCenterProgram,
 );

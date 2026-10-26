@@ -187,7 +187,7 @@ export const calculateActivationPlan = ({
     rules.percentageMax,
   );
   // Percent → fraction (unit conversion, not a business constant).
-  const totalActivationRequirement = goalAmount * (activationPercentage / 100);
+  const totalActivationRequirement = toCents(goalAmount * (activationPercentage / 100));
   const snapshot = buildInputSnapshot(financials);
 
   // One plan per configured month count, shortest = fastest. The label enum

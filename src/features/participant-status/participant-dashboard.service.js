@@ -63,17 +63,47 @@ const pickProjectionMeta = (projection) =>
       }
     : null;
 
+const ONE_TIME = "one_time";
+
+const toFeaturedOption = (option, reason) => ({
+  label: option.label,
+  reason,
+  months: option.months,
+  scheduledPayment: option.scheduledPayment,
+  finalPayment: option.finalPayment ?? null,
+  totalActivationRequirement: option.totalActivationRequirement,
+  projection: option.projection ?? null,
+});
+
+// The one-time choice is a single payment, so it has no schedule.
+const toFeaturedOneTime = (oneTimeOption) => ({
+  label: ONE_TIME,
+  reason: "selected",
+  months: null,
+  scheduledPayment: null,
+  finalPayment: null,
+  totalActivationRequirement: oneTimeOption.totalActivationRequirement,
+  projection: oneTimeOption.projection ?? null,
+});
+
 /**
- * Compact summary of one recommendation. The featured option is the plan the
- * participant chose, else the fastest plan that fits their budget, else none
- * (the affordability status then explains why).
+ * The featured option of a recommendation summary: the plan the participant
+ * chose (a paced plan or the one-time payment), else the fastest plan that
+ * fits their budget, else none (the affordability status then explains why).
  */
-const toRecommendationSummary = (recommendation, selection) => {
-  const view = toParticipantView(recommendation);
+const pickFeaturedOption = (view) => {
+  if (view.selectedOption === ONE_TIME && view.oneTimeOption)
+    return toFeaturedOneTime(view.oneTimeOption);
   const chosen = view.selectedOption
     ? view.options.find((option) => option.label === view.selectedOption)
     : null;
-  const featured = chosen ?? view.options.find((option) => option.affordable) ?? null;
+  if (chosen) return toFeaturedOption(chosen, "selected");
+  const fits = view.options.find((option) => option.affordable);
+  return fits ? toFeaturedOption(fits, "fits_budget") : null;
+};
+
+const toRecommendationSummary = (recommendation, selection) => {
+  const view = toParticipantView(recommendation);
   const first = view.options[0];
 
   return {
@@ -85,16 +115,7 @@ const toRecommendationSummary = (recommendation, selection) => {
     activationPercentage: first?.activationPercentage ?? null,
     recommendedActivation: view.oneTimeOption?.totalActivationRequirement ?? null,
     affordabilityStatus: view.affordabilityStatus,
-    featuredOption: featured
-      ? {
-          label: featured.label,
-          reason: chosen ? "selected" : "fits_budget",
-          months: featured.months,
-          scheduledPayment: featured.scheduledPayment,
-          totalActivationRequirement: featured.totalActivationRequirement,
-          projection: featured.projection ?? null,
-        }
-      : null,
+    featuredOption: pickFeaturedOption(view),
     oneTimeOption: {
       totalActivationRequirement: view.oneTimeOption?.totalActivationRequirement ?? null,
       projection: view.oneTimeOption?.projection ?? null,
@@ -146,7 +167,7 @@ export const getMyDashboard = async (user) => {
         .sort({ purchasedAt: -1, createdAt: -1 })
         .lean(),
       Payment.find(owner)
-        .select("purpose description amount currency status paymentDate createdAt providerTransactionRef refundStatus")
+        .select("purpose description amount currency status failureReason lastAttemptFailureReason paymentDate createdAt providerTransactionRef refundStatus")
         .sort({ createdAt: -1 })
         .limit(DASHBOARD_RECENT_PAYMENTS_LIMIT)
         .lean(),
@@ -200,6 +221,9 @@ export const getMyDashboard = async (user) => {
           amount: payment.amount,
           currency: payment.currency,
           status: payment.status,
+          // Lets the dashboard say "Canceled" / "Card declined" like Payment history.
+          failureReason: payment.failureReason ?? null,
+          lastAttemptFailureReason: payment.lastAttemptFailureReason ?? null,
           date: payment.paymentDate ?? payment.createdAt,
           reference: payment.providerTransactionRef ?? null,
           refundStatus: payment.refundStatus,

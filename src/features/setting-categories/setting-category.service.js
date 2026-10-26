@@ -108,29 +108,28 @@ export const updateSettingCategory = async (id, data, user) => {
 
 export const deleteSettingCategory = async (id, user) => {
   const category = await findCategoryById(id);
-  const settings = await Setting.find({ category: category.slug }).select(
-    "key category",
-  );
-  const deletedSettingKeys = settings.map((setting) => setting.key);
-  await Setting.deleteMany({ category: category.slug });
+  // Settings can't be deleted or moved, and the calculation reads them, so
+  // only an empty category may go. Deleting one used to remove its settings
+  // with no way to recover their values.
+  const settingCount = await Setting.countDocuments({ category: category.slug });
+  if (settingCount > 0)
+    throw new AppError(
+      `${category.label} still holds ${settingCount} setting${settingCount === 1 ? "" : "s"} the platform uses, so it can't be deleted. Only an empty category can be deleted.`,
+      HTTP_STATUS.CONFLICT,
+    );
+
   await category.deleteOne();
   await writeAuditLog({
     actorId: user._id,
     action: ENUMS.AUDIT_LOG_ACTION.DELETED_SETTING_CATEGORY,
     targetType: ENUMS.AUDIT_LOG_TARGET_TYPE.SETTING_CATEGORY,
     targetId: category._id,
-    beforeValue: {
-      ...category.toObject(),
-      deletedSettingKeys,
-    },
+    beforeValue: category.toObject(),
   });
 
   return {
     success: true,
-    message:
-      deletedSettingKeys.length > 0
-        ? `Setting category deleted along with ${deletedSettingKeys.length} setting${deletedSettingKeys.length === 1 ? "" : "s"}`
-        : "Setting category deleted successfully",
+    message: "Setting category deleted successfully",
     data: category,
   };
 };
