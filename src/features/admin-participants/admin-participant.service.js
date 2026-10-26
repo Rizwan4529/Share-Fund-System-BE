@@ -84,18 +84,18 @@ const allowedCentersFor = async (founderTier) => {
   return plan?.includedSuccessCenters?.length || DEFAULT_SUCCESS_CENTER_LIMIT;
 };
 
-export const listParticipants = async (query) => {
-  const {
-    page,
-    limit,
-    search,
-    status,
-    questionnaire,
-    accountStatus,
-    sortBy,
-    sortOrder,
-  } = query;
-
+/**
+ * Filters + sort shared by the paginated list and the CSV export, so an
+ * export always matches what the admin is viewing.
+ */
+const participantsPipeline = ({
+  search,
+  status,
+  questionnaire,
+  accountStatus,
+  sortBy,
+  sortOrder,
+}) => {
   const pipeline = [
     {
       $match: {
@@ -135,7 +135,7 @@ export const listParticipants = async (query) => {
         let: { uid: "$_id" },
         pipeline: [
           { $match: { $expr: { $eq: ["$userId", "$$uid"] } } },
-          { $project: { status: 1 } },
+          { $project: { status: 1, completionPercentage: 1 } },
         ],
         as: "profile",
       },
@@ -163,85 +163,105 @@ export const listParticipants = async (query) => {
   const direction = sortOrder === ENUMS.SORT_ORDER.ASC ? 1 : -1;
   const sortField = SORT_FIELDS[sortBy] ?? "updatedAt";
   pipeline.push({ $sort: { [sortField]: direction, _id: direction } });
+  return pipeline;
+};
 
-  pipeline.push({
-    $facet: {
-      total: [{ $count: "count" }],
-      rows: [
-        { $skip: (page - 1) * limit },
-        { $limit: limit },
-        // Per-page joins: only run for the rows actually returned.
+// Per-row joins + output shape — run only for rows actually returned.
+const PARTICIPANT_ROW_STAGES = [
+  {
+    $lookup: {
+      from: SuccessCenterSelection.collection.name,
+      let: { uid: "$_id" },
+      pipeline: [
         {
-          $lookup: {
-            from: SuccessCenterSelection.collection.name,
-            let: { uid: "$_id" },
-            pipeline: [
-              {
-                $match: {
-                  $expr: { $eq: ["$userId", "$$uid"] },
-                  status: ENUMS.SUCCESS_CENTER_SELECTION_STATUS.ACTIVE,
-                },
-              },
-              { $count: "count" },
-            ],
-            as: "activeSelections",
+          $match: {
+            $expr: { $eq: ["$userId", "$$uid"] },
+            status: ENUMS.SUCCESS_CENTER_SELECTION_STATUS.ACTIVE,
           },
         },
-        {
-          $lookup: {
-            from: FounderPlan.collection.name,
-            let: { tier: "$founderTier" },
-            pipeline: [
-              { $match: { $expr: { $eq: ["$name", "$$tier"] } } },
-              {
-                $project: {
-                  includedCount: {
-                    $size: { $ifNull: ["$includedSuccessCenters", []] },
-                  },
-                },
-              },
-            ],
-            as: "plan",
-          },
-        },
+        { $count: "count" },
+      ],
+      as: "activeSelections",
+    },
+  },
+  {
+    $lookup: {
+      from: FounderPlan.collection.name,
+      let: { tier: "$founderTier" },
+      pipeline: [
+        { $match: { $expr: { $eq: ["$name", "$$tier"] } } },
         {
           $project: {
-            name: 1,
-            email: 1,
-            standing: 1,
-            questionnaireComplete: 1,
-            accountStatus: "$status",
-            createdAt: 1,
-            lastActiveAt: "$updatedAt",
-            centersUsed: {
-              $ifNull: [{ $arrayElemAt: ["$activeSelections.count", 0] }, 0],
+            includedCount: {
+              $size: { $ifNull: ["$includedSuccessCenters", []] },
             },
-            planCenters: { $arrayElemAt: ["$plan.includedCount", 0] },
           },
         },
       ],
+      as: "plan",
     },
-  });
+  },
+  {
+    $project: {
+      name: 1,
+      email: 1,
+      country: 1,
+      standing: 1,
+      founderTier: 1,
+      planningAccessStatus: 1,
+      questionnaireComplete: 1,
+      profileCompletion: { $arrayElemAt: ["$profile.completionPercentage", 0] },
+      accountStatus: "$status",
+      createdAt: 1,
+      lastActiveAt: "$updatedAt",
+      centersUsed: {
+        $ifNull: [{ $arrayElemAt: ["$activeSelections.count", 0] }, 0],
+      },
+      planCenters: { $arrayElemAt: ["$plan.includedCount", 0] },
+    },
+  },
+];
 
-  const [result] = await User.aggregate(pipeline).collation({
-    locale: "en",
-    strength: 2, // case-insensitive name/email sorting
-  });
+const PARTICIPANT_COLLATION = {
+  locale: "en",
+  strength: 2, // case-insensitive name/email sorting
+};
+
+const toParticipantRow = ({ standing, planCenters, centersUsed, ...row }) => {
+  const centersTotal = planCenters || DEFAULT_SUCCESS_CENTER_LIMIT;
+  return {
+    ...row,
+    status: standing,
+    statusLabel: PARTICIPANT_STANDING_LABELS[standing],
+    centersUsed,
+    centersTotal,
+    centersSelected: centersLabel(centersUsed, centersTotal),
+  };
+};
+
+/** Every participant matching the list filters (no paging) — for CSV export. */
+export const findParticipantsForExport = async (filters) => {
+  const rows = await User.aggregate([
+    ...participantsPipeline(filters),
+    ...PARTICIPANT_ROW_STAGES,
+  ]).collation(PARTICIPANT_COLLATION);
+  return rows.map(toParticipantRow);
+};
+
+export const listParticipants = async (query) => {
+  const { page, limit } = query;
+
+  const [result] = await User.aggregate([
+    ...participantsPipeline(query),
+    {
+      $facet: {
+        total: [{ $count: "count" }],
+        rows: [{ $skip: (page - 1) * limit }, { $limit: limit }, ...PARTICIPANT_ROW_STAGES],
+      },
+    },
+  ]).collation(PARTICIPANT_COLLATION);
   const total = result?.total[0]?.count ?? 0;
-
-  const participants = (result?.rows ?? []).map(
-    ({ standing, planCenters, centersUsed, ...row }) => {
-      const centersTotal = planCenters || DEFAULT_SUCCESS_CENTER_LIMIT;
-      return {
-        ...row,
-        status: standing,
-        statusLabel: PARTICIPANT_STANDING_LABELS[standing],
-        centersUsed,
-        centersTotal,
-        centersSelected: centersLabel(centersUsed, centersTotal),
-      };
-    },
-  );
+  const participants = (result?.rows ?? []).map(toParticipantRow);
 
   return {
     success: true,

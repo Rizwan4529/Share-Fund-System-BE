@@ -86,64 +86,63 @@ const ENROLLMENT_SORT = {
   [ENUMS.ENROLLMENT_SORT_BY.STATUS]: "status",
 };
 
+const PURCHASE_SHAPE = {
+  $project: {
+    type: "$purpose",
+    userId: 1,
+    planId: 1,
+    fundingAccessPlanKey: 1,
+    programAllowance: 1,
+    paymentId: 1,
+    date: { $ifNull: ["$purchasedAt", "$createdAt"] },
+    status: {
+      $switch: {
+        branches: [
+          { case: { $eq: ["$activationStatus", "completed"] }, then: ENROLLMENT.ACTIVE },
+          { case: { $eq: ["$activationStatus", "failed"] }, then: ENROLLMENT.FAILED },
+        ],
+        default: ENROLLMENT.PENDING,
+      },
+    },
+  },
+};
+
+const SELECTION_SHAPE = {
+  $project: {
+    type: { $literal: PURPOSE.PROGRAM_ACTIVATION },
+    userId: 1,
+    programId: 1,
+    categoryId: 1,
+    paymentId: "$activationPaymentId",
+    date: { $ifNull: ["$activationPaidAt", { $ifNull: ["$selectedAt", "$createdAt"] }] },
+    status: {
+      $cond: [
+        { $eq: ["$status", ENUMS.SUCCESS_CENTER_SELECTION_STATUS.REMOVED] },
+        ENROLLMENT.REMOVED,
+        {
+          $cond: [
+            { $eq: ["$activationStatus", ENUMS.SELECTION_ACTIVATION_STATUS.PAID] },
+            ENROLLMENT.ACTIVE,
+            ENROLLMENT.PENDING,
+          ],
+        },
+      ],
+    },
+  },
+};
+
 /**
  * One "enrollment" = who enrolled in / activated what:
  *  - a FounderPurchase (funding_access or founder_tier), or
  *  - a SuccessCenterSelection (program_activation; unpaid = pending).
- * Both are projected to the same shape and merged with $unionWith.
+ * Both are projected to the same shape and merged with $unionWith. Filters +
+ * sort are shared by the paginated list and the CSV export.
  */
-export const listEnrollments = async (query) => {
-  const { page, limit, search, type, status, from, to, sortBy, sortOrder } = query;
-
-  const purchaseShape = {
-    $project: {
-      type: "$purpose",
-      userId: 1,
-      planId: 1,
-      fundingAccessPlanKey: 1,
-      programAllowance: 1,
-      paymentId: 1,
-      date: { $ifNull: ["$purchasedAt", "$createdAt"] },
-      status: {
-        $switch: {
-          branches: [
-            { case: { $eq: ["$activationStatus", "completed"] }, then: ENROLLMENT.ACTIVE },
-            { case: { $eq: ["$activationStatus", "failed"] }, then: ENROLLMENT.FAILED },
-          ],
-          default: ENROLLMENT.PENDING,
-        },
-      },
-    },
-  };
-
-  const selectionShape = {
-    $project: {
-      type: { $literal: PURPOSE.PROGRAM_ACTIVATION },
-      userId: 1,
-      programId: 1,
-      categoryId: 1,
-      paymentId: "$activationPaymentId",
-      date: { $ifNull: ["$activationPaidAt", { $ifNull: ["$selectedAt", "$createdAt"] }] },
-      status: {
-        $cond: [
-          { $eq: ["$status", ENUMS.SUCCESS_CENTER_SELECTION_STATUS.REMOVED] },
-          ENROLLMENT.REMOVED,
-          {
-            $cond: [
-              { $eq: ["$activationStatus", ENUMS.SELECTION_ACTIVATION_STATUS.PAID] },
-              ENROLLMENT.ACTIVE,
-              ENROLLMENT.PENDING,
-            ],
-          },
-        ],
-      },
-    },
-  };
-
+const enrollmentsPipeline = ({ search, type, status, from, to, sortBy, sortOrder }) => {
   const direction = sortOrder === ENUMS.SORT_ORDER.ASC ? 1 : -1;
-  const pipeline = [
-    purchaseShape,
-    { $unionWith: { coll: SuccessCenterSelection.collection.name, pipeline: [selectionShape] } },
+  return [
+    PURCHASE_SHAPE,
+    { $unionWith: { coll: SuccessCenterSelection.collection.name, pipeline: [SELECTION_SHAPE] } },
     {
       $match: {
         ...(type && { type }),
@@ -153,73 +152,74 @@ export const listEnrollments = async (query) => {
     },
     ...participantStages(search),
     { $sort: { [ENROLLMENT_SORT[sortBy] ?? "date"]: direction, _id: direction } },
-    paginate(page, limit)([
-      // Display names — only for the rows on this page.
-      {
-        $lookup: {
-          from: FounderPlan.collection.name,
-          localField: "planId",
-          foreignField: "_id",
-          pipeline: [{ $project: { name: 1 } }],
-          as: "plan",
-        },
-      },
-      {
-        $lookup: {
-          from: SuccessCenterProgram.collection.name,
-          localField: "programId",
-          foreignField: "_id",
-          pipeline: [{ $project: { name: 1 } }],
-          as: "program",
-        },
-      },
-      {
-        $lookup: {
-          from: SuccessCenterCategory.collection.name,
-          localField: "categoryId",
-          foreignField: "_id",
-          pipeline: [{ $project: { name: 1 } }],
-          as: "category",
-        },
-      },
-      {
-        $lookup: {
-          from: Payment.collection.name,
-          localField: "paymentId",
-          foreignField: "_id",
-          pipeline: [{ $project: { status: 1, amount: 1, currency: 1 } }],
-          as: "payment",
-        },
-      },
-      {
-        $project: {
-          type: 1,
-          status: 1,
-          date: 1,
-          participant: {
-            _id: "$userId",
-            name: "$participantName",
-            email: "$participantEmail",
-          },
-          planningAccessStatus: "$participant.planningAccessStatus",
-          fundingAccessPlanKey: 1,
-          programAllowance: 1,
-          founderPlanName: { $arrayElemAt: ["$plan.name", 0] },
-          programName: { $arrayElemAt: ["$program.name", 0] },
-          categoryName: { $arrayElemAt: ["$category.name", 0] },
-          payment: { $arrayElemAt: ["$payment", 0] },
-        },
-      },
-    ]),
   ];
+};
 
-  const [result] = await FounderPurchase.aggregate(pipeline).collation(COLLATION);
+// Display names — only for the rows actually returned.
+const ENROLLMENT_ROW_STAGES = [
+  {
+    $lookup: {
+      from: FounderPlan.collection.name,
+      localField: "planId",
+      foreignField: "_id",
+      pipeline: [{ $project: { name: 1 } }],
+      as: "plan",
+    },
+  },
+  {
+    $lookup: {
+      from: SuccessCenterProgram.collection.name,
+      localField: "programId",
+      foreignField: "_id",
+      pipeline: [{ $project: { name: 1 } }],
+      as: "program",
+    },
+  },
+  {
+    $lookup: {
+      from: SuccessCenterCategory.collection.name,
+      localField: "categoryId",
+      foreignField: "_id",
+      pipeline: [{ $project: { name: 1 } }],
+      as: "category",
+    },
+  },
+  {
+    $lookup: {
+      from: Payment.collection.name,
+      localField: "paymentId",
+      foreignField: "_id",
+      pipeline: [{ $project: { status: 1, amount: 1, currency: 1 } }],
+      as: "payment",
+    },
+  },
+  {
+    $project: {
+      type: 1,
+      status: 1,
+      date: 1,
+      participant: {
+        _id: "$userId",
+        name: "$participantName",
+        email: "$participantEmail",
+      },
+      planningAccessStatus: "$participant.planningAccessStatus",
+      fundingAccessPlanKey: 1,
+      programAllowance: 1,
+      founderPlanName: { $arrayElemAt: ["$plan.name", 0] },
+      programName: { $arrayElemAt: ["$program.name", 0] },
+      categoryName: { $arrayElemAt: ["$category.name", 0] },
+      payment: { $arrayElemAt: ["$payment", 0] },
+    },
+  },
+];
 
-  // Funding Access plan labels live in the pricing settings.
+/** Adds itemName/itemDetail/paymentStatus (Funding Access labels live in settings). */
+const withEnrollmentLabels = async (rows) => {
   const fundingLabels = new Map(
     (await listFundingAccessPlans()).map((plan) => [plan.key, plan.label]),
   );
-  const enrollments = (result?.rows ?? []).map(
+  return rows.map(
     ({ fundingAccessPlanKey, founderPlanName, programName, categoryName, ...row }) => ({
       ...row,
       itemName:
@@ -232,13 +232,33 @@ export const listEnrollments = async (query) => {
       paymentStatus: row.payment?.status ?? null,
     }),
   );
+};
+
+export const listEnrollments = async (query) => {
+  const { page, limit } = query;
+  const [result] = await FounderPurchase.aggregate([
+    ...enrollmentsPipeline(query),
+    paginate(page, limit)(ENROLLMENT_ROW_STAGES),
+  ]).collation(COLLATION);
 
   return {
     success: true,
     message: "Enrollments retrieved successfully",
-    data: { enrollments, pagination: pageResult(result, page, limit) },
+    data: {
+      enrollments: await withEnrollmentLabels(result?.rows ?? []),
+      pagination: pageResult(result, page, limit),
+    },
   };
 };
+
+/** Every enrollment matching the list filters (no paging) — for CSV export. */
+export const findEnrollmentsForExport = async (filters) =>
+  withEnrollmentLabels(
+    await FounderPurchase.aggregate([
+      ...enrollmentsPipeline(filters),
+      ...ENROLLMENT_ROW_STAGES,
+    ]).collation(COLLATION),
+  );
 
 /* ─── Payments ─── */
 
@@ -249,11 +269,10 @@ const PAYMENT_SORT = {
   [ENUMS.ADMIN_PAYMENT_SORT_BY.NAME]: "participantName",
 };
 
-export const listPayments = async (query) => {
-  const { page, limit, search, purpose, status, from, to, sortBy, sortOrder } = query;
+/** Filters + sort shared by the paginated list and the CSV export. */
+const paymentsPipeline = ({ search, purpose, status, from, to, sortBy, sortOrder }) => {
   const direction = sortOrder === ENUMS.SORT_ORDER.ASC ? 1 : -1;
-
-  const [result] = await Payment.aggregate([
+  return [
     {
       $match: {
         ...(purpose && { purpose }),
@@ -263,25 +282,34 @@ export const listPayments = async (query) => {
     },
     ...participantStages(search),
     { $sort: { [PAYMENT_SORT[sortBy] ?? "createdAt"]: direction, _id: direction } },
-    paginate(page, limit)([
-      {
-        $project: {
-          participant: { _id: "$userId", name: "$participantName", email: "$participantEmail" },
-          purpose: 1,
-          referenceId: 1,
-          description: 1,
-          amount: 1,
-          currency: 1,
-          status: 1,
-          paymentDate: 1,
-          createdAt: 1,
-          providerTransactionRef: 1,
-          refundStatus: 1,
-          disputeStatus: 1,
-          failureReason: 1,
-        },
-      },
-    ]),
+  ];
+};
+
+const PAYMENT_ROW_STAGES = [
+  {
+    $project: {
+      participant: { _id: "$userId", name: "$participantName", email: "$participantEmail" },
+      purpose: 1,
+      referenceId: 1,
+      description: 1,
+      amount: 1,
+      currency: 1,
+      status: 1,
+      paymentDate: 1,
+      createdAt: 1,
+      providerTransactionRef: 1,
+      refundStatus: 1,
+      disputeStatus: 1,
+      failureReason: 1,
+    },
+  },
+];
+
+export const listPayments = async (query) => {
+  const { page, limit } = query;
+  const [result] = await Payment.aggregate([
+    ...paymentsPipeline(query),
+    paginate(page, limit)(PAYMENT_ROW_STAGES),
   ]).collation(COLLATION);
 
   return {
@@ -293,6 +321,12 @@ export const listPayments = async (query) => {
     },
   };
 };
+
+/** Every payment matching the list filters (no paging) — for CSV export. */
+export const findPaymentsForExport = async (filters) =>
+  Payment.aggregate([...paymentsPipeline(filters), ...PAYMENT_ROW_STAGES]).collation(
+    COLLATION,
+  );
 
 export const getPayment = async (id) => {
   const payment = await Payment.findById(id)

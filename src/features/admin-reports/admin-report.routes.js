@@ -12,6 +12,7 @@ import {
   revenueQuerySchema,
 } from "./admin-report.validator.js";
 import {
+  getOverview,
   getPayment,
   getRevenueSummary,
   listEnrollments,
@@ -26,5 +27,7 @@ router.get("/enrollments", validateQuery(listEnrollmentsQuerySchema), listEnroll
 router.get("/payments", validateQuery(listPaymentsQuerySchema), listPayments);
 router.get("/payments/:id", validateParams(paymentIdParamSchema), getPayment);
 router.get("/revenue/summary", validateQuery(revenueQuerySchema), getRevenueSummary);
+// Admin home metrics; the optional range applies to time-based metrics.
+router.get("/overview", validateQuery(revenueQuerySchema), getOverview);
 
 export default router;

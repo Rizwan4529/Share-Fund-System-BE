@@ -23,6 +23,7 @@ import activationRoutes, {
 } from "#/features/recommendations/recommendation.routes.js";
 import paymentRoutes from "#/features/payments/payment.routes.js";
 import adminReportRoutes from "#/features/admin-reports/admin-report.routes.js";
+import adminExportRoutes from "#/features/admin-exports/admin-export.routes.js";
 import participantStatusRoutes from "#/features/participant-status/participant-status.routes.js";
 import { stripeWebhook } from "#/features/payments/payment.controller.js";
 const app = express();
@@ -50,6 +51,8 @@ app.use(
       }
     },
     credentials: true,
+    // Lets the admin CSV export download keep the server's filename.
+    exposedHeaders: ["Content-Disposition", "X-Export-Row-Count"],
   }),
 );
 
@@ -97,6 +100,7 @@ app.use("/api/v1/success-centers", successCenterRoutes);
 app.use("/api/v1/activation", activationRoutes);
 app.use("/api/v1/admin/recommendations", adminRecommendationRouter);
 app.use("/api/v1/payments", paymentRoutes);
+app.use("/api/v1/admin/export", adminExportRoutes);
 // Admin read-only reports (enrollments, payments, revenue). Mounted after the
 // more specific /admin/* routers above.
 app.use("/api/v1/admin", adminReportRoutes);

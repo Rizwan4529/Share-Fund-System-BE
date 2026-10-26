@@ -407,6 +407,7 @@ export const ENUMS = {
     UPDATED_PARTICIPANT_STATUS: "updated_participant_status",
     UPDATED_PARTICIPANT_ACCESS: "updated_participant_access",
     FAILED_PAYMENT: "failed_payment",
+    EXPORTED_DATA: "exported_data",
   },
   AUDIT_LOG_TARGET_TYPE: {
     USER: "User",
@@ -432,6 +433,20 @@ export const ENUMS = {
     FINANCIAL_LEDGER: "FinancialLedger",
     WAITLIST_ENTRY: "WaitlistEntry",
     WAITLIST_CAMPAIGN_CATEGORY: "WaitlistCampaignCategory",
+    // Not a model: exports have no single target document (no targetId).
+    DATA_EXPORT: "DataExport",
+  },
+  // Admin CSV exports (GET /api/v1/admin/export/:dataset).
+  EXPORT_DATASET: {
+    PARTICIPANTS: "participants",
+    ENROLLMENTS: "enrollments",
+    PAYMENTS: "payments",
+  },
+  // Kinds of rows in the admin overview's recent activity list.
+  ADMIN_ACTIVITY_TYPE: {
+    SIGNUP: "signup",
+    SELECTION: "selection",
+    PAYMENT: "payment",
   },
   CONTENT_BLOCK_TYPE: {
     RICH_TEXT: "richtext",
@@ -632,6 +647,10 @@ export const PAGINATION = {
 
 // How many recent payments the participant dashboard lists (display only).
 export const DASHBOARD_RECENT_PAYMENTS_LIMIT = 5;
+
+// Admin overview (display only): signup windows in days, recent activity size.
+export const ADMIN_OVERVIEW_SIGNUP_WINDOWS_DAYS = [7, 30];
+export const ADMIN_OVERVIEW_ACTIVITY_LIMIT = 10;
 
 /**
  * Settings-collection keys the activation calculation reads. Only the KEYS
